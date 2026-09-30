@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{% block title %}Inventario{% endblock %}
+{% block page_title %}🗄️ Inventario de VMs/VDIs{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('inventario.extraer_form') }}" class="btn btn-success btn-sm">⚡ Nueva Extracción</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Buscador global compacto */
+  .search-hero {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-hero:focus-within {
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px var(--c-accent-glow);
+  }
+  .search-hero .icon { font-size: 1rem; opacity: 0.7; }
+  .search-hero input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--c-text);
+    font-family: inherit;
+    font-size: 0.82rem;
+  }
+  .search-hero input::placeholder { color: var(--c-text3); }
+
+  /* Filtros compactos */
+  .filter-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .filter-bar .form-group {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 120px;
+  }
+  .filter-bar .form-label {
+    font-size: 0.66rem;
+    margin-bottom: 3px;
+    color: var(--c-text2);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .filter-bar .form-control {
+    padding: 4px 7px;
+    font-size: 0.75rem;
+    height: 30px;
+  }
+
+  /* Tabla compacta y limpia */
+  .table-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    border-radius: var(--radius-sm);
+  }
+
+  #tabla-inventario {
+    font-size: 0.75rem;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #tabla-inventario th {
+    padding: 7px 8px;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  #tabla-inventario td {
+    padding: 5px 8px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  #tabla-inventario .badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    font-weight: 600;
+  }
+
+  /* Columnas ordenables */
+  th[data-col] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th[data-col]:hover { color: var(--c-accent2); }
+  th[data-col] .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 0.68rem; }
+  th[data-col].asc  .sort-arrow::after { content: '▲'; opacity: 1; }
+  th[data-col].desc .sort-arrow::after { content: '▼'; opacity: 1; }
+  th[data-col]:not(.asc):not(.desc) .sort-arrow::after { content: '⇅'; }
+
+  /* Recursos inline */
+  .res-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.74rem;
+    white-space: nowrap;
+  }
+  .res-bar .bar {
+    flex: 1;
+    height: 4px;
+    background: var(--c-surface2);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 35px;
+    max-width: 55px;
+  }
+  .res-bar .bar-fill { height: 100%; border-radius: 2px; }
+  .bar-cpu  { background: var(--c-accent); }
+  .bar-ram  { background: var(--c-purple); }
+  .bar-disk { background: var(--c-cyan); }
+
+  /* Highlight matches */
+  mark { background: rgba(59,130,246,0.3); color: var(--c-text); border-radius: 2px; padding: 0 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Buscador global -->
+<div class="search-hero">
+  <span class="icon">🔍</span>
+  <input type="text" id="g-buscar" placeholder="Buscar por nombre, usuario, IP, DNS, pool, empresa, SO, manager, agent..." autofocus>
+  <span class="text-muted text-sm" id="lbl-count">{{ maquinas|length }} registros</span>
+</div>
+
+<!-- Filtros secundarios -->
+<div class="filter-bar mb-4">
+  <div class="form-group">
+    <label class="form-label">Tipo</label>
+    <select id="f-tipo" class="form-control" onchange="applyFilters()">
+      <option value="">Todos</option>
+      <option value="VDI">VDI</option>
+      <option value="VM">VM</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Origen</label>
+    <select id="f-origen" class="form-control" onchange="applyFilters()">
+      <option value="">Todos</option>
+      {% for o in origenes %}
+      <option value="{{ o }}" {% if filtros.origen==o %}selected{% endif %}>{{ o.upper() }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Empresa</label>
+    <select id="f-empresa" class="form-control" onchange="applyFilters()">
+      <option value="">Todas</option>
+      {% for e in empresas %}
+      <option value="{{ e }}" {% if filtros.empresa==e %}selected{% endif %}>{{ e }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Pool</label>
+    <select id="f-pool" class="form-control" onchange="applyFilters()">
+      <option value="">Todos</option>
+      {% for p in pools %}
+      <option value="{{ p }}" {% if filtros.pool==p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Estado</label>
+    <select id="f-estado" class="form-control" onchange="applyFilters()">
+      <option value="">Todos</option>
+      <option value="CONNECTED">Connected</option>
+      <option value="AVAILABLE">Available</option>
+      <option value="DISCONNECTED">Disconnected</option>
+      <option value="UNREACHABLE">Unreachable</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Servidor</label>
+    <select id="f-servidor" class="form-control" onchange="applyFilters()">
+      <option value="">Todos</option>
+      {% for s in servidores %}
+      <option value="{{ s.id }}" {% if filtros.servidor_id==s.id|string %}selected{% endif %}>{{ s.nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group" style="flex:0; display:flex; gap:6px; align-items:flex-end;">
+    <button class="btn btn-ghost" onclick="clearFilters()">✕ Limpiar</button>
+    <div style="position:relative;">
+      <button class="btn btn-outline" type="button" onclick="toggleColPicker(event)" style="white-space:nowrap;">⚙️ Columnas ▾</button>
+      <div id="col-picker" class="hidden" style="position:absolute; right:0; top:calc(100% + 4px); z-index:100; background:var(--c-surface); border:1px solid var(--c-border2); border-radius:var(--radius-sm); padding:10px 14px; min-width:210px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid var(--c-border); padding-bottom:6px;">
+          <span style="font-weight:600; font-size:0.75rem;">Columnas Visibles</span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="resetCols()" style="font-size:0.68rem; padding:2px 4px;">Mostrar Todas</button>
+        </div>
+        <div id="col-checkboxes" style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; font-size:0.75rem;">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats rápidas -->
+<div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+  <span class="badge badge-vdi" id="lbl-vdi">VDI: {{ maquinas|selectattr('tipo','eq','VDI')|list|length }}</span>
+  <span class="badge badge-vm" id="lbl-vm">VM: {{ maquinas|selectattr('tipo','eq','VM')|list|length }}</span>
+  <span class="text-muted text-sm">·</span>
+  <span class="text-muted text-sm" id="lbl-cpu-sum">CPU total: —</span>
+  <span class="text-muted text-sm">·</span>
+  <span class="text-muted text-sm" id="lbl-ram-sum">RAM total: —</span>
+  <span class="text-muted text-sm">·</span>
+  <span class="text-muted text-sm" id="lbl-disk-sum">Disco total: —</span>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table id="tabla-inventario">
+      <thead>
+        <tr>
+          <th data-col="0">Tipo <span class="sort-arrow"></span></th>
+          <th data-col="1">Origen <span class="sort-arrow"></span></th>
+          <th data-col="2">Nombre VM <span class="sort-arrow"></span></th>
+          <th data-col="3">Pool <span class="sort-arrow"></span></th>
+          <th data-col="4">Empresa <span class="sort-arrow"></span></th>
+          <th data-col="5">Usuario <span class="sort-arrow"></span></th>
+          <th data-col="6">Estado Horizon <span class="sort-arrow"></span></th>
+          <th data-col="6.5">Estado Operacional <span class="sort-arrow"></span></th>
+          <th data-col="7">CPU <span class="sort-arrow"></span></th>
+          <th data-col="8">RAM (GB) <span class="sort-arrow"></span></th>
+          <th data-col="9">Disco (GB) <span class="sort-arrow"></span></th>
+          <th data-col="10">SO <span class="sort-arrow"></span></th>
+          <th data-col="11">IP <span class="sort-arrow"></span></th>
+          <th data-col="12">DNS <span class="sort-arrow"></span></th>
+          <th data-col="13">Manager <span class="sort-arrow"></span></th>
+          <th data-col="14">Agent <span class="sort-arrow"></span></th>
+          <th data-col="15">Folder <span class="sort-arrow"></span></th>
+          <th data-col="16">Resource Pool <span class="sort-arrow"></span></th>
+          <th data-col="17">Datastores <span class="sort-arrow"></span></th>
+          <th data-col="18">HW Version <span class="sort-arrow"></span></th>
+          <th data-col="19">Mantenimiento <span class="sort-arrow"></span></th>
+          <th data-col="20">Estado Error <span class="sort-arrow"></span></th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-body">
+        {% for m in maquinas %}
+        <tr
+          data-tipo="{{ m.tipo }}"
+          data-origen="{{ m.origen }}"
+          data-empresa="{{ m.empresa or '' }}"
+          data-pool="{{ m.pool or '' }}"
+          data-estado="{{ (m.estado_horizon or '').upper() }}"
+          data-servidor="{{ m.servidor_id }}"
+          data-search="{{ [
+            m.nombre, m.usuario_asignado, m.ip, m.dns, m.pool,
+            m.empresa, m.so, m.manager, m.agent_version,
+            m.estado_horizon, m.origen, m.tipo, m.vcenter_host,
+            m.annotation
+          ]|join(' ')|lower }}"
+          data-cpu="{{ m.cpu or 0 }}"
+          data-ram="{{ m.ram_gb or 0 }}"
+          data-disk="{{ m.disk_gb or 0 }}">
+
+          <td>
+            <span class="badge {% if m.tipo == 'VDI' %}badge-vdi{% else %}badge-vm{% endif %}">
+              {{ m.tipo }}
+            </span>
+          </td>
+          <td>
+            {% if m.origen %}
+              <span class="badge badge-origen">{{ m.origen.upper() }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="mono fw-600 text-sm">
+            <a href="{{ url_for('vm.detalle', nombre=m.nombre) }}"
+               style="color:var(--c-accent2);text-decoration:none;" title="Ver detalle e historial">
+              {{ m.nombre }}
+            </a>
+          </td>
+          <td class="text-sm muted">{{ m.pool or '—' }}</td>
+          <td class="text-sm">{{ m.empresa or '—' }}</td>
+          <td class="text-sm">{{ m.usuario_asignado or '—' }}</td>
+          <td>
+            {% set estado = (m.estado_horizon or '') %}
+            {% set eu = estado.upper() %}
+            {% if 'CONNECTED' in eu %}
+              <span class="badge badge-connected">{{ estado }}</span>
+            {% elif 'AVAILABLE' in eu %}
+              <span class="badge badge-available">{{ estado }}</span>
+            {% elif 'DISCONNECTED' in eu %}
+              <span class="badge badge-disconnected">{{ estado }}</span>
+            {% elif estado %}
+              <span class="badge badge-error">{{ estado }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% set op_est = (m.estado or '') %}
+            {% if op_est %}
+              <span class="badge badge-available" style="background:rgba(59,130,246,0.15);border-color:var(--c-accent);color:var(--c-accent2);">
+                {{ op_est }}
+              </span>
+            {% else %}<span class="text-muted text-sm">—</span>{% endif %}
+          </td>
+          <!-- CPU -->
+          <td>
+            {% if m.cpu %}
+            <div class="res-bar">
+              <span>{{ m.cpu }}</span>
+              <div class="bar"><div class="bar-fill bar-cpu" style="width:{{ [m.cpu * 12, 100]|min }}%"></div></div>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <!-- RAM -->
+          <td>
+            {% if m.ram_gb %}
+            <div class="res-bar">
+              <span>{{ m.ram_gb }}</span>
+              <div class="bar"><div class="bar-fill bar-ram" style="width:{{ [(m.ram_gb / 64 * 100)|round|int, 100]|min }}%"></div></div>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <!-- Disco -->
+          <td>
+            {% if m.disk_gb %}
+            <div class="res-bar">
+              <span>{{ m.disk_gb }}</span>
+              <div class="bar"><div class="bar-fill bar-disk" style="width:{{ [(m.disk_gb / 500 * 100)|round|int, 100]|min }}%"></div></div>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-sm muted">{{ m.so or '—' }}</td>
+          <td class="mono text-sm muted">{{ m.ip or '—' }}</td>
+          <td class="mono text-sm muted">{{ m.dns or '—' }}</td>
+          <td class="text-sm muted">{{ m.manager or '—' }}</td>
+          <td class="mono text-sm muted">{{ m.agent_version or '—' }}</td>
+          <td class="text-sm muted">{{ m.folder or '—' }}</td>
+          <td class="text-sm muted">{{ m.resource_pool or '—' }}</td>
+          <td class="text-sm muted" title="{{ m.datastores or '' }}">{{ m.datastores or '—' }}</td>
+          <td class="mono text-sm muted">{{ m.hardware_version or '—' }}</td>
+          <td>{% if m.maintenance_mode %}<span class="badge badge-disconnected">SI</span>{% else %}<span class="text-muted text-sm">NO</span>{% endif %}</td>
+          <td>{% if m.in_error_state %}<span class="badge badge-error">SI</span>{% else %}<span class="text-muted text-sm">NO</span>{% endif %}</td>
+          <td>
+            <div class="d-flex gap-2">
+              <button class="btn btn-ghost btn-sm" title="Editar" onclick="openEdit({{ m.to_dict()|tojson }})">✏️</button>
+              {% if m.annotation %}
+              <span title="{{ m.annotation }}" style="cursor:default;font-size:0.9rem;">📝</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr id="empty-row">
+          <td colspan="23" style="text-align:center;padding:40px;" class="text-muted">
+            Sin datos. <a href="{{ url_for('inventario.extraer_form') }}" class="btn btn-primary btn-sm" style="margin-left:12px;">Extraer ahora</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal edición -->
+<div class="modal-overlay hidden" id="modal-edit" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:700px;">
+    <h3 class="modal-title">✏️ Editar VM</h3>
+    <p class="text-muted text-sm mb-4 mono" id="edit-vm-nombre"></p>
+    <form id="form-edit-vm" onsubmit="submitEdit(event)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select name="tipo" class="form-control">
+            <option value="VDI">VDI</option>
+            <option value="VM">VM</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Empresa</label>
+          <input type="text" name="empresa" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pool</label>
+          <input type="text" name="pool" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Usuario Asignado</label>
+          <input type="text" name="usuario_asignado" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Manager</label>
+          <input type="text" name="manager" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estado Horizon</label>
+          <input type="text" name="estado_horizon" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Versión Agent</label>
+          <input type="text" name="agent_version" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SO</label>
+          <input type="text" name="so" class="form-control">
+        </div>
+      </div>
+
+      <!-- Anotación -->
+      <div class="form-group mt-3">
+        <label class="form-label">📝 Anotación <span style="color:var(--c-text3);font-weight:400;">(se conservan entre extracciones)</span></label>
+        <textarea name="annotation" id="edit-notas" class="form-control" rows="3"
+                  placeholder="Agregá una anotación sobre esta VM: propietario, estado, comentarios, etc."></textarea>
+      </div>
+
+      <!-- Usuarios del directorio vinculados -->
+      <div class="mt-3" id="usuarios-dir-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <label class="form-label mb-0">👥 Usuarios Directorio</label>
+          <button type="button" class="btn btn-outline btn-sm" onclick="abrirVincularDirModal()">+ Vincular</button>
+        </div>
+        <div id="usuarios-dir-lista"
+             style="background:var(--c-surface2);border-radius:var(--radius-sm);padding:10px;min-height:40px;font-size:0.8rem;">
+          <span class="text-muted">Cargando...</span>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-edit').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Sub-modal Vincular usuario del directorio desde modal de edición -->
+<div class="modal-overlay hidden" id="modal-vincular-dir"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:480px;">
+    <h3 class="modal-title">🔗 Vincular usuario del directorio</h3>
+    <div class="form-group">
+      <label class="form-label">Buscar usuario</label>
+      <input type="text" id="input-buscar-dir-usuario" class="form-control"
+             placeholder="Nombre, username, email..."
+             oninput="buscarUsuarioDir(this.value)">
+    </div>
+    <div id="lista-dir-result"
+         style="max-height:200px;overflow-y:auto;margin-bottom:12px;"></div>
+    <input type="hidden" id="dir-usuario-sel-id">
+    <div id="dir-usuario-sel-info" class="hidden"
+         style="background:var(--c-surface2);border-radius:6px;padding:10px;margin-bottom:12px;font-size:0.82rem;">
+      <span class="fw-600" id="dir-usuario-sel-nombre"></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <select id="dir-vinculo-tipo" class="form-control">
+        <option value="principal">Principal</option>
+        <option value="secundario">Secundario</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas del vínculo</label>
+      <textarea id="dir-vinculo-notas" class="form-control" rows="2"
+                placeholder="ej. Asignado mientras regresa de licencia"></textarea>
+    </div>
+    <div class="d-flex gap-2 mt-3" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost"
+              onclick="document.getElementById('modal-vincular-dir').classList.add('hidden')">Cancelar</button>
+      <button type="button" class="btn btn-primary" onclick="confirmarVincularDir()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentEditId = null;
+let sortState = { col: null, dir: 1 }; // dir: 1=asc, -1=desc
+
+// ── Edición ──────────────────────────────────────────────────────────
+
+function openEdit(m) {
+  currentEditId = m.id;
+  const form = document.getElementById('form-edit-vm');
+  document.getElementById('edit-vm-nombre').textContent = m.nombre;
+  form.querySelector('[name="tipo"]').value            = m.tipo;
+  form.querySelector('[name="empresa"]').value         = m.empresa;
+  form.querySelector('[name="pool"]').value            = m.pool;
+  form.querySelector('[name="usuario_asignado"]').value= m.usuario_asignado;
+  form.querySelector('[name="manager"]').value         = m.manager;
+  form.querySelector('[name="estado_horizon"]').value  = m.estado_horizon;
+  form.querySelector('[name="agent_version"]').value   = m.agent_version;
+  form.querySelector('[name="so"]').value              = m.so;
+  // Anotación — campo manual persistente
+  document.getElementById('edit-notas').value          = m.annotation || '';
+  // Cargar usuarios del directorio vinculados
+  cargarUsuariosDirModal(m.id);
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+async function cargarUsuariosDirModal(maquinaId) {
+  const container = document.getElementById('usuarios-dir-lista');
+  container.innerHTML = '<span class="text-muted">Cargando...</span>';
+  try {
+    const res = await fetch(`/directorio/api/maquina/${maquinaId}/usuarios`);
+    const lista = await res.json();
+    if (!lista.length) {
+      container.innerHTML = '<span class="text-muted">Sin usuarios del directorio vinculados.</span>';
+      return;
+    }
+    container.innerHTML = lista.map(u => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--c-border);">
+        <div>
+          <span class="mono fw-600">${u.username}</span>
+          ${u.nombre_completo ? `<span style="margin-left:8px;color:var(--c-text2);">${u.nombre_completo}</span>` : ''}
+          <span class="badge badge-vdi" style="margin-left:6px;font-size:0.65rem;">${u.tipo}</span>
+          ${!u.activo_ad ? '<span class="badge badge-error" style="margin-left:4px;font-size:0.65rem;">Inactivo AD</span>' : ''}
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="desvincularDir(${u.vinculo_id})">\u2715</button>
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<span class="text-muted">Error al cargar usuarios.</span>';
+  }
+}
+
+async function desvincularDir(vid) {
+  const res = await fetch(`/directorio/api/desvincular/${vid}`, { method: 'DELETE', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+  const data = await res.json();
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: 'Desvinculado.' });
+    cargarUsuariosDirModal(currentEditId);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error.' });
+  }
+}
+
+function abrirVincularDirModal() {
+  document.getElementById('input-buscar-dir-usuario').value = '';
+  document.getElementById('lista-dir-result').innerHTML = '';
+  document.getElementById('dir-usuario-sel-id').value = '';
+  document.getElementById('dir-usuario-sel-info').classList.add('hidden');
+  document.getElementById('modal-vincular-dir').classList.remove('hidden');
+}
+
+let dirSearchTimer = null;
+async function buscarUsuarioDir(q) {
+  clearTimeout(dirSearchTimer);
+  const container = document.getElementById('lista-dir-result');
+  if (q.length < 2) { container.innerHTML = ''; return; }
+  dirSearchTimer = setTimeout(async () => {
+    const res = await fetch(`/directorio/api/buscar?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.length) {
+      container.innerHTML = '<div class="text-muted text-sm" style="padding:8px;">Sin resultados.</div>';
+      return;
+    }
+    container.innerHTML = data.map(u => `
+      <div style="padding:7px 10px;border-radius:6px;cursor:pointer;margin-bottom:2px;border:1px solid var(--c-border);
+                  transition:background 0.1s;"
+           onmouseover="this.style.background='var(--c-surface2)'" onmouseout="this.style.background=''"
+           onclick="seleccionarUsuarioDir(${u.id}, '${(u.username+'').replace(/'/g,"'")}', '${(u.nombre_completo||'').replace(/'/g,"'")}')">
+        <span class="mono fw-600">${u.username}</span>
+        ${u.nombre_completo ? `<span style="margin-left:8px;color:var(--c-text3);font-size:0.75rem;">${u.nombre_completo}</span>` : ''}
+        ${!u.activo_ad ? '<span class="badge badge-error" style="margin-left:4px;font-size:0.62rem;">Inactivo AD</span>' : ''}
+      </div>
+    `).join('');
+  }, 280);
+}
+
+function seleccionarUsuarioDir(id, username, nombre) {
+  document.getElementById('dir-usuario-sel-id').value = id;
+  document.getElementById('dir-usuario-sel-nombre').textContent = `${username}${nombre ? ' — '+nombre : ''}`;
+  document.getElementById('dir-usuario-sel-info').classList.remove('hidden');
+  document.getElementById('lista-dir-result').innerHTML = '';
+  document.getElementById('input-buscar-dir-usuario').value = username;
+}
+
+async function confirmarVincularDir() {
+  const uid = parseInt(document.getElementById('dir-usuario-sel-id').value);
+  if (!uid) { Toast.fire({ icon: 'warning', title: 'Seleccioná un usuario primero.' }); return; }
+  const tipo  = document.getElementById('dir-vinculo-tipo').value;
+  const notas = document.getElementById('dir-vinculo-notas').value.trim();
+  const res = await fetch('/directorio/api/vincular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content },
+    body: JSON.stringify({ maquina_id: currentEditId, directorio_usuario_id: uid, tipo, notas })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById('modal-vincular-dir').classList.add('hidden');
+    Toast.fire({ icon: 'success', title: 'Usuario vinculado correctamente.' });
+    cargarUsuariosDirModal(currentEditId);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al vincular.' });
+  }
+}
+
+async function submitEdit(event) {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const res  = await fetch(`/inventario/editar/${currentEditId}`, { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById('modal-edit').classList.add('hidden');
+    Toast.fire({ icon: 'success', title: 'Máquina actualizada correctamente.' });
+    setTimeout(() => location.reload(), 600);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al guardar cambios' });
+  }
+}
+
+// ── Filtrado ──────────────────────────────────────────────────────────
+
+let debounceTimer;
+document.getElementById('g-buscar').addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(applyFilters, 150);
+});
+
+function applyFilters() {
+  const buscar   = document.getElementById('g-buscar').value.toLowerCase().trim();
+  const tipo     = document.getElementById('f-tipo').value;
+  const origen   = document.getElementById('f-origen').value;
+  const empresa  = document.getElementById('f-empresa').value;
+  const pool     = document.getElementById('f-pool').value;
+  const estado   = document.getElementById('f-estado').value;
+  const servidor = document.getElementById('f-servidor').value;
+
+  let count = 0, vdi = 0, vm = 0;
+  let totalCpu = 0, totalRam = 0, totalDisk = 0;
+
+  document.querySelectorAll('#tabla-body tr[data-tipo]').forEach(row => {
+    const match =
+      (!buscar   || row.dataset.search.includes(buscar)) &&
+      (!tipo     || row.dataset.tipo     === tipo) &&
+      (!origen   || row.dataset.origen   === origen) &&
+      (!empresa  || row.dataset.empresa  === empresa) &&
+      (!pool     || row.dataset.pool     === pool) &&
+      (!estado   || row.dataset.estado.includes(estado)) &&
+      (!servidor || row.dataset.servidor === servidor);
+
+    row.style.display = match ? '' : 'none';
+    if (match) {
+      count++;
+      if (row.dataset.tipo === 'VDI') vdi++; else vm++;
+      totalCpu  += parseFloat(row.dataset.cpu  || 0);
+      totalRam  += parseFloat(row.dataset.ram  || 0);
+      totalDisk += parseFloat(row.dataset.disk || 0);
+    }
+  });
+
+  document.getElementById('lbl-count').textContent  = count + ' registros';
+  document.getElementById('lbl-vdi').textContent    = 'VDI: ' + vdi;
+  document.getElementById('lbl-vm').textContent     = 'VM: '  + vm;
+  document.getElementById('lbl-cpu-sum').textContent = `CPU total: ${totalCpu}`;
+  document.getElementById('lbl-ram-sum').textContent = `RAM total: ${totalRam.toFixed(1)} GB`;
+  document.getElementById('lbl-disk-sum').textContent= `Disco total: ${totalDisk.toFixed(1)} GB`;
+}
+
+function clearFilters() {
+  document.getElementById('g-buscar').value = '';
+  ['f-tipo','f-origen','f-empresa','f-pool','f-estado','f-servidor']
+    .forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+}
+
+// ── Ordenamiento por columna ───────────────────────────────────────────
+
+document.querySelectorAll('th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = parseInt(th.dataset.col);
+    const numeric = [7,8,9].includes(col); // CPU, RAM, Disk
+
+    // Toggle direction
+    if (sortState.col === col) {
+      sortState.dir *= -1;
+    } else {
+      sortState.col = col;
+      sortState.dir = 1;
+    }
+
+    // Update header classes
+    document.querySelectorAll('th[data-col]').forEach(h => h.classList.remove('asc','desc'));
+    th.classList.add(sortState.dir === 1 ? 'asc' : 'desc');
+
+    // Sort rows
+    const tbody = document.getElementById('tabla-body');
+    const rows = Array.from(tbody.querySelectorAll('tr[data-tipo]'));
+
+    rows.sort((a, b) => {
+      const va = a.cells[col]?.textContent.trim().replace(/[▲▼⇅]/g,'') || '';
+      const vb = b.cells[col]?.textContent.trim().replace(/[▲▼⇅]/g,'') || '';
+      if (numeric) {
+        const na = parseFloat(va) || 0;
+        const nb = parseFloat(vb) || 0;
+        return (na - nb) * sortState.dir;
+      }
+      return va.localeCompare(vb, 'es') * sortState.dir;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+    applyFilters();
+  });
+});
+
+// ── Visibilidad de Columnas ───────────────────────────────────────────
+
+const VDI_COLUMNS = [
+  { index: 0, label: 'Tipo' },
+  { index: 1, label: 'Origen' },
+  { index: 2, label: 'Nombre VM', locked: true },
+  { index: 3, label: 'Pool' },
+  { index: 4, label: 'Empresa' },
+  { index: 5, label: 'Usuario' },
+  { index: 6, label: 'Estado Horizon' },
+  { index: 7, label: 'Estado Operacional' },
+  { index: 8, label: 'CPU' },
+  { index: 9, label: 'RAM' },
+  { index: 10, label: 'Disco' },
+  { index: 11, label: 'SO' },
+  { index: 12, label: 'IP' },
+  { index: 13, label: 'DNS' },
+  { index: 14, label: 'Manager' },
+  { index: 15, label: 'Agent' },
+  { index: 16, label: 'Folder' },
+  { index: 17, label: 'Resource Pool' },
+  { index: 18, label: 'Datastores' },
+  { index: 19, label: 'HW Version' },
+  { index: 20, label: 'Mantenimiento' },
+  { index: 21, label: 'Estado Error' },
+  { index: 22, label: 'Acciones' },
+];
+
+function toggleColPicker(e) {
+  e.stopPropagation();
+  const picker = document.getElementById('col-picker');
+  picker.classList.toggle('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('col-picker');
+  if (picker && !picker.contains(e.target)) {
+    picker.classList.add('hidden');
+  }
+});
+
+function initColPicker() {
+  const saved = JSON.parse(localStorage.getItem('vdi_hidden_cols') || '[]');
+  const container = document.getElementById('col-checkboxes');
+  if (!container) return;
+
+  container.innerHTML = VDI_COLUMNS.map(col => `
+    <label style="display:flex; align-items:center; gap:6px; cursor:${col.locked ? 'not-allowed' : 'pointer'}; opacity:${col.locked ? '0.6' : '1'};">
+      <input type="checkbox" ${saved.includes(col.index) ? '' : 'checked'} ${col.locked ? 'disabled' : ''} onchange="setColVisibility(${col.index}, this.checked)">
+      ${col.label}
+    </label>
+  `).join('');
+
+  saved.forEach(colIdx => setColVisibility(colIdx, false, false));
+}
+
+function setColVisibility(colIdx, visible, save = true) {
+  const table = document.getElementById('tabla-inventario');
+  if (!table) return;
+
+  const hiddenCols = JSON.parse(localStorage.getItem('vdi_hidden_cols') || '[]');
+  if (save) {
+    const updated = visible ? hiddenCols.filter(i => i !== colIdx) : [...new Set([...hiddenCols, colIdx])];
+    localStorage.setItem('vdi_hidden_cols', JSON.stringify(updated));
+  }
+
+  const cellSelector = `tr > th:nth-child(${colIdx + 1}), tr > td:nth-child(${colIdx + 1})`;
+  table.querySelectorAll(cellSelector).forEach(el => {
+    el.style.display = visible ? '' : 'none';
+  });
+}
+
+function resetCols() {
+  localStorage.removeItem('vdi_hidden_cols');
+  VDI_COLUMNS.forEach(col => setColVisibility(col.index, true, false));
+  initColPicker();
+}
+
+// Init
+applyFilters();
+initColPicker();
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block page_title %}👤 Gestión de Usuarios{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user and current_user.rol == 'admin' %}
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-nuevo').classList.remove('hidden')">
+  + Nuevo Usuario
+</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <h2>Usuarios registrados</h2>
+    <span class="text-muted text-sm">{{ usuarios|length }} usuario(s)</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Último Login</th>
+          <th>Creado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td class="fw-600 mono">{{ u.username }}</td>
+          <td class="text-sm">{{ u.nombre_completo or '—' }}</td>
+          <td class="text-sm muted">{{ u.email or '—' }}</td>
+          <td>
+            {% if u.rol == 'admin' %}
+              <span class="badge badge-error">⚙ admin</span>
+            {% else %}
+              <span class="badge badge-available">usuario</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.activo %}
+              <span class="badge badge-connected">● Activo</span>
+            {% else %}
+              <span class="badge badge-disconnected">○ Inactivo</span>
+            {% endif %}
+          </td>
+          <td class="mono text-sm muted">
+            {{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}
+          </td>
+          <td class="mono text-sm muted">
+            {{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}
+          </td>
+          <td>
+            {% if current_user and current_user.rol == 'admin' %}
+            <div class="d-flex gap-2">
+              <button class="btn btn-ghost btn-sm"
+                      data-id="{{ u.id }}"
+                      data-username="{{ u.username }}"
+                      data-nombre="{{ u.nombre_completo or '' }}"
+                      data-email="{{ u.email or '' }}"
+                      data-rol="{{ u.rol }}"
+                      data-activo="{{ '1' if u.activo else '0' }}"
+                      onclick="openEditUserFromBtn(this)">✏️</button>
+              <form method="POST" id="form-delete-{{ u.id }}" action="{{ url_for('auth.eliminar_usuario', uid=u.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="button" class="btn btn-danger btn-sm"
+                        onclick="confirmDelete('¿Eliminar usuario {{ u.username }}?', 'Esta acción borrará el acceso del usuario.', () => document.getElementById('form-delete-{{ u.id }}').submit())">
+                  🗑
+                </button>
+              </form>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nuevo Usuario -->
+<div class="modal-overlay hidden" id="modal-nuevo" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">➕ Nuevo Usuario</h3>
+    <form method="POST" action="{{ url_for('auth.crear_usuario') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include "_form_usuario.html" %}
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-nuevo').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar Usuario -->
+<div class="modal-overlay hidden" id="modal-editar" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">✏️ Editar Usuario</h3>
+    <form method="POST" id="form-edit-user" action="">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label class="form-label">Usuario *</label>
+        <input type="text" name="username" class="form-control" placeholder="ej. jperez" required>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" name="nombre_completo" class="form-control" placeholder="ej. Juan Pérez">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" placeholder="ej. jperez@empresa.com">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rol *</label>
+        <select name="rol" class="form-control" required>
+          <option value="usuario">usuario — Acceso de lectura y extracción</option>
+          <option value="admin">admin — Acceso completo y administración</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" name="password" class="form-control" placeholder="Dejar vacío para no cambiar">
+        <div class="text-muted text-sm mt-1">Dejar vacío para mantener contraseña actual.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="edit-u-activo" name="activo"> Activo
+        </label>
+      </div>
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-editar').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditUserFromBtn(btn) {
+  const ds = btn.dataset;
+  const form = document.getElementById('form-edit-user');
+  form.action = `/usuarios/${ds.id}/editar`;
+  form.querySelector('[name="username"]').value        = ds.username;
+  form.querySelector('[name="nombre_completo"]').value = ds.nombre;
+  form.querySelector('[name="email"]').value           = ds.email;
+  form.querySelector('[name="rol"]').value             = ds.rol;
+  form.querySelector('[name="password"]').value        = '';
+  document.getElementById('edit-u-activo').checked    = (ds.activo === '1');
+  document.getElementById('modal-editar').classList.remove('hidden');
+}
+</script>
+{% endblock %}

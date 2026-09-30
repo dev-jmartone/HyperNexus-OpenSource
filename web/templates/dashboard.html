@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}📊 Dashboard General{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── KPIs ─────────────────────────────────────────────────────── -->
+<div class="kpi-grid">
+  <div class="kpi-tile kpi-blue">
+    <span class="kpi-icon">🖥️</span>
+    <div class="kpi-val" id="kpi-total">{{ kpis.total }}</div>
+    <div class="kpi-label">Total VMs/VDIs</div>
+  </div>
+  <div class="kpi-tile kpi-purple">
+    <span class="kpi-icon">🗖</span>
+    <div class="kpi-val" id="kpi-vdi">{{ kpis.total_vdi }}</div>
+    <div class="kpi-label">VDI</div>
+  </div>
+  <div class="kpi-tile kpi-cyan">
+    <span class="kpi-icon">🔵</span>
+    <div class="kpi-val" id="kpi-vm">{{ kpis.total_vm }}</div>
+    <div class="kpi-label">VM</div>
+  </div>
+  <div class="kpi-tile kpi-green">
+    <span class="kpi-icon">✅</span>
+    <div class="kpi-val" id="kpi-conectadas">{{ kpis.conectadas }}</div>
+    <div class="kpi-label">Conectadas</div>
+  </div>
+  <div class="kpi-tile kpi-yellow">
+    <span class="kpi-icon">⏳</span>
+    <div class="kpi-val" id="kpi-disponibles">{{ kpis.disponibles }}</div>
+    <div class="kpi-label">Disponibles</div>
+  </div>
+  <div class="kpi-tile kpi-red">
+    <span class="kpi-icon">⚠️</span>
+    <div class="kpi-val" id="kpi-huerfanas">{{ kpis.huerfanas }}</div>
+    <div class="kpi-label">Huérfanas</div>
+  </div>
+  <div class="kpi-tile kpi-red">
+    <span class="kpi-icon">🔴</span>
+    <div class="kpi-val" id="kpi-errores">{{ kpis.error_count }}</div>
+    <div class="kpi-label">Con Error</div>
+  </div>
+  <div class="kpi-tile kpi-blue">
+    <span class="kpi-icon">🖧</span>
+    <div class="kpi-val">{{ kpis.servidores }}</div>
+    <div class="kpi-label">Servidores</div>
+  </div>
+</div>
+
+<!-- ── Semáforo de Salud ─────────────────────────────────────────── -->
+<div class="card mb-6">
+  <div class="card-header">
+    <h2>🚦 Semáforo de Salud</h2>
+    <button class="btn btn-ghost btn-sm" onclick="refreshSemaforo()">↻ Actualizar</button>
+  </div>
+  <div class="card-body">
+    <div class="semaforo-grid" id="semaforo-grid">
+      <div class="semaforo-item">
+        <div class="semaforo-dot rojo"></div>
+        <div class="semaforo-count" id="sem-rojas">{{ kpis.error_count }}</div>
+        <div class="semaforo-label">Unreachable / Error</div>
+      </div>
+      <div class="semaforo-item">
+        <div class="semaforo-dot amarillo"></div>
+        <div class="semaforo-count" id="sem-amarillas">{{ kpis.desconectadas }}</div>
+        <div class="semaforo-label">Desconectadas</div>
+      </div>
+      <div class="semaforo-item">
+        <div class="semaforo-dot verde"></div>
+        <div class="semaforo-count" id="sem-verdes">{{ kpis.conectadas }}</div>
+        <div class="semaforo-label">Conectadas y en uso</div>
+      </div>
+      <div class="semaforo-item">
+        <div class="semaforo-dot gris"></div>
+        <div class="semaforo-count" id="sem-grises">{{ kpis.huerfanas }}</div>
+        <div class="semaforo-label">Disponibles sin usuario</div>
+      </div>
+    </div>
+
+    {% if kpis.error_count > 0 %}
+    <details class="mt-4">
+      <summary class="btn btn-ghost btn-sm" style="cursor:pointer;">
+        Ver VMs con error ({{ kpis.error_count }})
+      </summary>
+      <div id="detalle-rojas" class="mt-3 table-wrapper">
+        <em class="text-muted text-sm">Cargando...</em>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Charts ────────────────────────────────────────────────────── -->
+<div class="charts-grid">
+
+  <div class="card">
+    <div class="card-header">
+      <h2>🏢 Distribución por Empresa</h2>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrapper">
+        <canvas id="chart-empresa"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>🌐 Distribución por Origen</h2>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrapper">
+        <canvas id="chart-origen"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>📦 Top Pools</h2>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrapper">
+        <canvas id="chart-pool"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>📡 Estado de VMs</h2>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrapper">
+        <canvas id="chart-estado"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Últimos Snapshots ─────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header">
+    <h2>📋 Últimas Extracciones</h2>
+    <a href="{{ url_for('inventario.extraer_form') }}" class="btn btn-primary btn-sm">+ Nueva Extracción</a>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Servidor</th>
+          <th>Fecha</th>
+          <th>Total</th>
+          <th>VDI</th>
+          <th>VM</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for snap in snapshots_recientes %}
+        <tr>
+          <td class="fw-600">{{ snap.servidor.nombre if snap.servidor else '—' }}</td>
+          <td class="mono text-sm muted">{{ snap.timestamp.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ snap.total_vms }}</td>
+          <td><span class="badge badge-vdi">{{ snap.total_vdi }}</span></td>
+          <td><span class="badge badge-vm">{{ snap.total_vm }}</span></td>
+          <td>
+            {% if snap.estado == 'ok' %}
+              <span class="badge badge-connected">✓ OK</span>
+            {% else %}
+              <span class="badge badge-error" title="{{ snap.error_msg }}">✗ Error</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-muted" style="text-align:center;padding:32px;">
+            Sin datos todavía.
+            <a href="{{ url_for('inventario.extraer_form') }}" class="btn btn-primary btn-sm" style="margin-left:12px;">Extraer ahora</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_DEFAULTS = {
+  plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } } },
+  scales: {
+    x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+  }
+};
+
+const PALETTE = [
+  '#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444',
+  '#06b6d4','#ec4899','#84cc16','#f97316','#a855f7'
+];
+
+async function loadChart(canvasId, endpoint, type = 'bar') {
+  const res  = await fetch(endpoint);
+  const data = await res.json();
+
+  const ctx  = document.getElementById(canvasId).getContext('2d');
+  const cfg  = {
+    type,
+    data: {
+      labels: data.labels,
+      datasets: [{
+        data: data.data,
+        backgroundColor: type === 'doughnut'
+          ? PALETTE
+          : PALETTE.map(c => c + 'cc'),
+        borderColor: type === 'doughnut' ? 'transparent' : PALETTE,
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: type === 'doughnut',
+          labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, boxWidth: 12 }
+        }
+      },
+    }
+  };
+
+  if (type === 'bar') {
+    cfg.options.scales = CHART_DEFAULTS.scales;
+    cfg.options.indexAxis = 'y';
+  }
+
+  new Chart(ctx, cfg);
+}
+
+async function refreshSemaforo() {
+  const res  = await fetch('/api/semaforo');
+  const data = await res.json();
+  document.getElementById('sem-rojas').textContent    = data.rojas;
+  document.getElementById('sem-amarillas').textContent= data.amarillas;
+  document.getElementById('sem-verdes').textContent   = data.verdes;
+  document.getElementById('sem-grises').textContent   = data.grises;
+
+  if (data.detalle_rojas && data.detalle_rojas.length > 0) {
+    const tbl = document.getElementById('detalle-rojas');
+    if (tbl) {
+      tbl.innerHTML = `<table>
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Origen</th><th>Estado</th></tr></thead>
+        <tbody>${data.detalle_rojas.map(m =>
+          `<tr><td class="mono">${m.nombre}</td><td>${m.tipo}</td><td>${m.origen}</td>
+           <td><span class="badge badge-error">${m.estado_horizon}</span></td></tr>`
+        ).join('')}</tbody>
+      </table>`;
+    }
+  }
+}
+
+// Cargar charts al inicio
+loadChart('chart-empresa', '/api/distribucion/empresa', 'bar');
+loadChart('chart-origen',  '/api/distribucion/origen',  'doughnut');
+loadChart('chart-pool',    '/api/distribucion/pool',    'bar');
+loadChart('chart-estado',  '/api/distribucion/estado',  'doughnut');
+
+// Auto-refresh KPIs cada 5 minutos
+setInterval(async () => {
+  const res  = await fetch('/api/kpis');
+  const data = await res.json();
+  document.getElementById('kpi-total').textContent      = data.total;
+  document.getElementById('kpi-vdi').textContent        = data.vdi;
+  document.getElementById('kpi-vm').textContent         = data.vm;
+  document.getElementById('kpi-conectadas').textContent = data.conectadas;
+  document.getElementById('kpi-disponibles').textContent= data.disponibles;
+  document.getElementById('kpi-huerfanas').textContent  = data.huerfanas;
+  document.getElementById('kpi-errores').textContent    = data.errores;
+}, 300000);
+</script>
+{% endblock %}

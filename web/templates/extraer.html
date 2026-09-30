@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Extraer Datos{% endblock %}
+{% block page_title %}⚡ Extraer Datos{% endblock %}
+
+{% block content %}
+
+{% if active_job %}
+<div class="card mb-4" style="background:rgba(59,130,246,0.1);border:1px solid var(--c-accent);padding:16px 20px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <div>
+      <h3 style="margin:0;font-size:0.95rem;color:var(--c-accent2);">⚡ Hay una extracción en curso en segundo plano</h3>
+      <p class="text-sm text-muted mt-1" style="margin:0;">Estado actual: {{ active_job.msg }} ({{ active_job.pct or 0 }}%)</p>
+    </div>
+    <a href="{{ url_for('inventario.progreso', job_id=active_job.job_id) }}" class="btn btn-primary btn-sm">
+      Volver al Progreso ➔
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+  <div class="card">
+    <div class="card-header"><h2>Seleccionar Servidores</h2></div>
+    <div class="card-body">
+      {% if servidores %}
+      <form method="POST" id="form-extraer" action="{{ url_for('inventario.extraer_post') }}" onsubmit="return checkCredentialsBeforeSubmit(event)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-6">
+          {% for srv in servidores %}
+          <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--c-border);cursor:pointer;">
+            <input type="checkbox" name="servidor_ids" value="{{ srv.id }}"
+                   style="width:18px;height:18px;accent-color:var(--c-accent);" checked>
+            <div style="flex:1;">
+              <div class="fw-600">{{ srv.nombre }}</div>
+              <div class="text-muted text-sm mono">{{ srv.host }}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <span class="badge {% if srv.tipo == 'horizon' %}badge-vdi{% else %}badge-vm{% endif %}">
+                {{ srv.tipo.upper() }}
+              </span>
+              <span class="badge badge-connected">{{ srv.tipo_maquina }}</span>
+              {% if srv.origen %}
+              <span class="badge badge-origen">{{ srv.origen.upper() }}</span>
+              {% endif %}
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;">
+          <input type="checkbox" name="mantener_correcciones"
+                 style="width:16px;height:16px;accent-color:var(--c-accent);" checked>
+          <div>
+            <div class="text-sm fw-600">Mantener correcciones manuales</div>
+            <div class="text-muted text-sm">Aplica las ediciones manuales anteriores sobre los nuevos datos.</div>
+          </div>
+        </label>
+
+        <div class="mt-4 d-flex gap-2" style="justify-content:flex-end;">
+          <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost">Cancelar</a>
+          <button type="submit" class="btn btn-success btn-lg">⚡ Iniciar Extracción</button>
+        </div>
+      </form>
+      {% else %}
+      <div style="text-align:center;padding:32px;" class="text-muted">
+        <div style="font-size:2rem;margin-bottom:12px;">🖧</div>
+        Sin servidores registrados.
+        <div class="mt-4">
+          <a href="{{ url_for('servidores.index') }}" class="btn btn-primary">+ Agregar Servidor</a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card mb-4">
+      <div class="card-header"><h2>ℹ️ Cómo funciona</h2></div>
+      <div class="card-body text-sm" style="line-height:1.8;color:var(--c-text2);">
+        <ol style="padding-left:16px;">
+          <li>Se seleccionan los servidores a consultar.</li>
+          <li>Para cada servidor <strong class="badge badge-vdi">HORIZON</strong>: conecta via PowerCLI, obtiene pools, VMs y sesiones.</li>
+          <li>Para cada servidor <strong class="badge badge-vm">VCENTER</strong>: obtiene todas las VMs con CPU, RAM y OS.</li>
+          <li>Outlook/GAL clasifica usuarios por empresa y obtiene manager.</li>
+          <li>Los datos se guardan en la base de datos local.</li>
+          <li>Se puede generar el reporte Excel desde Reportes.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>📋 Últimas extracciones</h2></div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Servidor</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead>
+          <tbody>
+            {% for srv in servidores %}
+              {% set snap = srv.snapshots|sort(attribute='timestamp')|last if srv.snapshots else None %}
+              {% if snap %}
+              <tr>
+                <td class="text-sm fw-600">{{ srv.nombre }}</td>
+                <td class="mono text-sm muted">{{ snap.timestamp.strftime('%d/%m %H:%M') }}</td>
+                <td>{{ snap.total_vms }}</td>
+                <td>
+                  {% if snap.estado == 'ok' %}
+                    <span class="badge badge-connected">OK</span>
+                  {% else %}
+                    <span class="badge badge-error">Error</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function checkCredentialsBeforeSubmit(e) {
+  e.preventDefault();
+  const checked = document.querySelectorAll('input[name="servidor_ids"]:checked');
+  if (checked.length === 0) {
+    Toast.fire({ icon: 'warning', title: 'Seleccioná al menos un servidor' });
+    return false;
+  }
+
+  // Check if session token is active
+  const res = await fetch('/servidores/api/credenciales/status');
+  const data = await res.json();
+
+  if (data.active) {
+    document.getElementById('form-extraer').submit();
+  } else {
+    // Session token expired -> open prompt for password
+    promptvCenterCredentials();
+  }
+}
+</script>
+{% endblock %}

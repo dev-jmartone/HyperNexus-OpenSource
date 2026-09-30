@@ -1,0 +1,15 @@
+{
+  "name": "inventario-vdi",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web/frontend run dev",
+    "build": "npm --prefix web/frontend run build",
+    "preview": "npm --prefix web/frontend run preview",
+    "test": "npm --prefix web/frontend run test",
+    "lint": "npm --prefix web/frontend run lint"
+  },
+  "workspaces": [
+    "web/frontend"
+  ]
+}

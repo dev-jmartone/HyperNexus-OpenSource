@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Detalle VM{% endblock %}
+{% block page_title %}
+  <span class="mono">{{ maquina.nombre }}</span>
+  <span class="badge {% if maquina.tipo == 'VDI' %}badge-vdi{% else %}badge-vm{% endif %}" style="margin-left:10px;">
+    {{ maquina.tipo }}
+  </span>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('inventario.index') }}" class="btn btn-ghost btn-sm">← Inventario</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:350px 1fr;gap:24px;align-items:start;">
+
+  <!-- ── Panel izquierdo: Estado actual ────────────────────────── -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-header"><h2>📋 Estado Actual</h2></div>
+      <div class="card-body">
+        <table style="width:100%;font-size:0.85rem;">
+          <tbody>
+            {% macro row(label, val, mono=false, badge=false, cls='') %}
+            <tr>
+              <td style="padding:7px 0;color:var(--c-text3);width:45%;">{{ label }}</td>
+              <td style="padding:7px 0;">
+                {% if badge and val %}
+                  <span class="badge {{ cls }}">{{ val }}</span>
+                {% elif mono and val %}
+                  <span class="mono text-sm">{{ val }}</span>
+                {% else %}
+                  {{ val or '—' }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endmacro %}
+
+            {{ row('Tipo', maquina.tipo, badge=true,
+                   cls='badge-vdi' if maquina.tipo=='VDI' else 'badge-vm') }}
+            {{ row('Origen', maquina.origen.upper() if maquina.origen else '', badge=true, cls='badge-origen') }}
+            {{ row('Pool', maquina.pool) }}
+            {{ row('Empresa', maquina.empresa) }}
+            {{ row('Usuario Asignado', maquina.usuario_asignado, mono=true) }}
+            {{ row('Manager', maquina.manager) }}
+            {% set est = maquina.estado_horizon or '' %}
+            <tr>
+              <td style="padding:7px 0;color:var(--c-text3);">Estado Horizon (Sesión)</td>
+              <td>
+                {% if 'CONNECTED' in est.upper() %}
+                  <span class="badge badge-connected">{{ est }}</span>
+                {% elif 'AVAILABLE' in est.upper() %}
+                  <span class="badge badge-available">{{ est }}</span>
+                {% elif 'DISCONNECTED' in est.upper() %}
+                  <span class="badge badge-disconnected">{{ est }}</span>
+                {% elif est %}
+                  <span class="badge badge-error">{{ est }}</span>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {{ row('Estado Horizon (Agente)', maquina.estado_horizon_agente, mono=true) }}
+            {{ row('Estado vCenter (Energía)', maquina.estado_vcenter) }}
+            {{ row('Estado Operacional (Excel)', maquina.estado, badge=true, cls='badge-available' if maquina.estado else '') }}
+            {{ row('Fecha Último Ingreso', maquina.fecha_ultimo_ingreso, mono=true) }}
+            {{ row('SO', maquina.so) }}
+            {{ row('DNS', maquina.dns, mono=true) }}
+            {{ row('IP', maquina.ip, mono=true) }}
+            {{ row('CPU', maquina.cpu) }}
+            {{ row('RAM (GB)', maquina.ram_gb) }}
+            {{ row('Versión Agent', maquina.agent_version, mono=true) }}
+            {{ row('VMware Tools', maquina.tools_status, mono=true) }}
+            {{ row('Host vCenter', maquina.vcenter_host, mono=true) }}
+          </tbody>
+        </table>
+
+        <!-- Anotación -->
+        <div class="mt-4">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:0.75rem;color:var(--c-text3);">📝 Anotación</div>
+            <button class="btn btn-ghost btn-sm" onclick="toggleEditNotas()">✏️ Editar</button>
+          </div>
+          <div id="notas-display"
+               style="background:var(--c-surface2);border-radius:var(--radius-sm);padding:12px;
+                      font-size:0.82rem;color:var(--c-text2);min-height:50px;white-space:pre-wrap;">
+            {{ maquina.annotation or 'Sin anotación.' }}
+          </div>
+          <form id="form-notas" class="hidden mt-2"
+                onsubmit="guardarNotas(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <textarea name="annotation" class="form-control" rows="3"
+                      style="margin-bottom:8px;">{{ maquina.annotation or '' }}</textarea>
+            <div class="d-flex gap-2" style="justify-content:flex-end;">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditNotas()">Cancelar</button>
+              <button type="submit" class="btn btn-primary btn-sm">Guardar Anotación</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Usuarios del directorio vinculados -->
+    <div class="card">
+      <div class="card-header">
+        <h2>👥 Usuarios Directorio</h2>
+        <a href="{{ url_for('directorio.index') }}" class="btn btn-ghost btn-sm">Ver Directorio</a>
+      </div>
+      <div class="card-body" id="panel-usuarios-dir">
+        <span class="text-muted">Cargando...</span>
+      </div>
+    </div>
+
+    <!-- Usuarios históricos -->
+    {% if usuarios_unicos %}
+    <div class="card mt-4">
+      <div class="card-header"><h2>👥 Usuarios Históricos</h2></div>
+      <div class="card-body">
+        <div class="chips">
+          {% for u in usuarios_unicos %}
+          <span class="chip">{{ u }}</span>
+          {% endfor %}
+        </div>
+        <div class="text-muted text-sm mt-3">{{ usuarios_unicos|length }} usuario(s) único(s)</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Panel derecho: Historial + Timeline ───────────────────── -->
+  <div>
+
+    <!-- Historial de usuarios -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2>🔄 Historial de Usuarios Asignados</h2>
+        <span class="text-muted text-sm">{{ historial|length }} cambio(s)</span>
+      </div>
+      {% if historial %}
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Usuario Anterior</th>
+              <th>Usuario Nuevo</th>
+              <th>Empresa Ant.</th>
+              <th>Empresa Nueva</th>
+              <th>Estado</th>
+              <th>Pool</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in historial %}
+            <tr>
+              <td class="mono text-sm muted">{{ h.detectado_en.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>
+                {% if h.usuario_anterior %}
+                  <span class="text-sm">{{ h.usuario_anterior }}</span>
+                {% else %}
+                  <span class="text-muted text-sm">Sin usuario</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if h.usuario_nuevo %}
+                  <span class="fw-600 text-sm">{{ h.usuario_nuevo }}</span>
+                {% else %}
+                  <span class="badge badge-available text-sm">Liberada</span>
+                {% endif %}
+              </td>
+              <td class="text-sm muted">{{ h.empresa_anterior or '—' }}</td>
+              <td class="text-sm">{{ h.empresa_nueva or '—' }}</td>
+              <td>
+                {% if h.estado_horizon %}
+                  {% set est = h.estado_horizon.upper() %}
+                  {% if 'CONNECTED' in est %}
+                    <span class="badge badge-connected">{{ h.estado_horizon }}</span>
+                  {% elif 'AVAILABLE' in est %}
+                    <span class="badge badge-available">{{ h.estado_horizon }}</span>
+                  {% else %}
+                    <span class="badge badge-disconnected">{{ h.estado_horizon }}</span>
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-sm muted">{{ h.pool or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted" style="text-align:center;padding:32px;">
+        Sin cambios de usuario registrados todavía.
+        <div class="text-sm mt-1">Los cambios se registran automáticamente en cada extracción.</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── Historial de Cambios Detectados (Pool, IP, Config) ───── -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2>📜 Historial de Comportamiento y Cambios (Deltas)</h2>
+        <span class="text-muted text-sm">{{ cambios_historial|length }} evento(s)</span>
+      </div>
+      {% if cambios_historial %}
+      <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha / Hora</th>
+              <th>Campo Modificado</th>
+              <th>Valor Anterior</th>
+              <th>Valor Nuevo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cambios_historial %}
+            <tr>
+              <td class="mono text-sm muted">
+                {{ c.detectado_en.strftime('%d/%m/%Y %H:%M') if c.detectado_en else '—' }}
+              </td>
+              <td>
+                <span class="badge badge-vdi" style="font-size:0.7rem;">
+                  {% if c.campo_modificado == 'pool' %}🏊 Pool
+                  {% elif c.campo_modificado == 'ip_principal' or c.campo_modificado == 'ip' %}🌐 IP
+                  {% elif c.campo_modificado == 'usuario_asignado' %}👤 Usuario
+                  {% elif c.campo_modificado == 'empresa' %}🏢 Empresa
+                  {% elif c.campo_modificado == 'estado_horizon' %}⚡ Estado Horizon
+                  {% else %}{{ c.campo_modificado }}{% endif %}
+                </span>
+              </td>
+              <td class="text-sm muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ c.valor_anterior or '—' }}
+              </td>
+              <td class="text-sm fw-600" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ c.valor_nuevo or '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted" style="text-align:center;padding:24px;">
+        Sin modificaciones de pool, IP o configuración registradas en las extracciones.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Timeline de snapshots -->
+    <div class="card">
+      <div class="card-header">
+        <h2>📸 Timeline de Snapshots</h2>
+        <span class="text-muted text-sm">Últimos {{ timeline|length }}</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Usuario Asignado</th>
+              <th>Estado</th>
+              <th>Empresa</th>
+              <th>Pool</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in timeline %}
+            <tr>
+              <td class="mono text-sm muted">
+                {{ m.snapshot.timestamp.strftime('%d/%m/%Y %H:%M') if m.snapshot and m.snapshot.timestamp else '—' }}
+              </td>
+              <td class="text-sm">{{ m.usuario_asignado or '—' }}</td>
+              <td>
+                {% set est = (m.estado_horizon or '').upper() %}
+                {% if 'CONNECTED' in est %}
+                  <span class="badge badge-connected">{{ m.estado_horizon }}</span>
+                {% elif 'AVAILABLE' in est %}
+                  <span class="badge badge-available">{{ m.estado_horizon }}</span>
+                {% elif est %}
+                  <span class="badge badge-error">{{ m.estado_horizon }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-sm muted">{{ m.empresa or '—' }}</td>
+              <td class="text-sm muted">{{ m.pool or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MAQUINA_ID = {{ maquina.id }};
+
+// ── Notas inline ────────────────────────────────────────────────────────────
+function toggleEditNotas() {
+  document.getElementById('notas-display').classList.toggle('hidden');
+  document.getElementById('form-notas').classList.toggle('hidden');
+}
+
+async function guardarNotas(event) {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const res  = await fetch(`/inventario/editar/${MAQUINA_ID}`, { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.ok) {
+    const anotacion = form.get('annotation') || '';
+    document.getElementById('notas-display').textContent = anotacion || 'Sin anotación.';
+    toggleEditNotas();
+    Toast.fire({ icon: 'success', title: 'Anotación guardada.' });
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al guardar.' });
+  }
+}
+
+// ── Usuarios del directorio ─────────────────────────────────────────────────
+async function cargarUsuariosDir() {
+  const panel = document.getElementById('panel-usuarios-dir');
+  try {
+    const res   = await fetch(`/directorio/api/maquina/${MAQUINA_ID}/usuarios`);
+    const lista = await res.json();
+    if (!lista.length) {
+      panel.innerHTML = `
+        <div style="text-align:center;padding:16px;" class="text-muted">
+          Sin usuarios del directorio vinculados.
+          <a href="/directorio" class="btn btn-outline btn-sm" style="margin-left:10px;">Ir al Directorio</a>
+        </div>`;
+      return;
+    }
+    panel.innerHTML = lista.map(u => `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:10px;border-bottom:1px solid var(--c-border);">
+        <div>
+          <a href="/directorio/${u.id}" style="color:var(--c-accent2);text-decoration:none;font-weight:600;font-family:monospace;">
+            ${u.username}
+          </a>
+          ${u.nombre_completo ? `<span style="margin-left:8px;color:var(--c-text2);font-size:0.82rem;">${u.nombre_completo}</span>` : ''}
+          <span class="badge badge-vdi" style="margin-left:6px;font-size:0.7rem;">${u.tipo}</span>
+          ${!u.activo_ad ? '<span class="badge badge-error" style="margin-left:4px;font-size:0.7rem;">Inactivo AD</span>' : ''}
+          ${u.notas ? `<div style="font-size:0.75rem;color:var(--c-text3);margin-top:3px;">${u.notas}</div>` : ''}
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="desvincularUsuarioDir(${u.vinculo_id})">✕</button>
+      </div>
+    `).join('') + `
+      <div style="padding:10px;text-align:right;">
+        <a href="/directorio" class="btn btn-ghost btn-sm">+ Agregar desde Directorio</a>
+      </div>`;
+  } catch(e) {
+    panel.innerHTML = '<span class="text-muted">Error al cargar.</span>';
+  }
+}
+
+async function desvincularUsuarioDir(vid) {
+  const result = await SwalDark.fire({
+    title: '¿Desvincular usuario?',
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: 'Sí, desvincular', cancelButtonText: 'Cancelar'
+  });
+  if (!result.isConfirmed) return;
+  const res  = await fetch(`/directorio/api/desvincular/${vid}`, { method: 'DELETE', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+  const data = await res.json();
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: 'Desvinculado.' });
+    cargarUsuariosDir();
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error.' });
+  }
+}
+
+// Init
+cargarUsuariosDir();
+</script>
+{% endblock %}

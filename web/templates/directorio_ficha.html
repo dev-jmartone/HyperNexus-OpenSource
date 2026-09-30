@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}{{ usuario.nombre_completo or usuario.username }} — Directorio{% endblock %}
+{% block page_title %}👤 {{ usuario.nombre_completo or usuario.username }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('directorio.index') }}" class="btn btn-ghost btn-sm">← Volver al Directorio</a>
+{% endblock %}
+
+{% block content %}
+
+<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;">
+
+  <!-- Ficha del usuario -->
+  <div class="card" style="position:sticky;top:80px;">
+    <div class="card-header">
+      <h2>Datos del Usuario</h2>
+      {% if not usuario.activo_ad %}
+        <span class="badge badge-error">⚠ Inactivo en AD</span>
+      {% else %}
+        <span class="badge badge-connected">● Activo AD</span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <!-- Avatar -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+        <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--c-accent),var(--c-purple));display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;flex-shrink:0;">
+          {{ (usuario.nombre_completo or usuario.username)[0].upper() }}
+        </div>
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--c-text);">{{ usuario.nombre_completo or usuario.username }}</div>
+          <div class="mono text-sm muted">{{ usuario.username }}</div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;">
+        {% set fields = [
+          ('📧 Email',       usuario.email),
+          ('🏢 Empresa',     usuario.empresa),
+          ('🗂 Depto.',      usuario.departamento),
+          ('📞 Teléfono',    usuario.telefono),
+        ] %}
+        {% for label, val in fields %}
+        <tr style="border-bottom:1px solid var(--c-border);">
+          <td style="padding:8px 0;font-size:0.75rem;color:var(--c-text3);width:100px;">{{ label }}</td>
+          <td style="padding:8px 0;font-size:0.82rem;color:var(--c-text);">{{ val or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+
+      <!-- Notas -->
+      <div class="mt-4">
+        <div style="font-size:0.75rem;color:var(--c-text3);margin-bottom:6px;">📝 Notas</div>
+        <div style="background:var(--c-surface2);border-radius:var(--radius-sm);padding:12px;font-size:0.82rem;color:var(--c-text2);min-height:60px;white-space:pre-wrap;">
+          {{ usuario.notas or 'Sin notas.' }}
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <button class="btn btn-outline btn-sm" style="width:100%;"
+                onclick="openEditFicha()">✏️ Editar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VMs vinculadas -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2>🖥️ VMs/VDIs Asignadas</h2>
+        <button class="btn btn-primary btn-sm" onclick="openVincularModal()">+ Vincular VM</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>VM / VDI</th>
+              <th>Tipo</th>
+              <th>Pool</th>
+              <th>Empresa</th>
+              <th>Estado Horizon</th>
+              <th>Tipo Vínculo</th>
+              <th>Notas Vínculo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tabla-vms">
+            {% for asig in asignaciones %}
+            {% set maq = maquinas_map.get(asig.maquina_id) %}
+            {% if maq %}
+            <tr id="row-asig-{{ asig.id }}">
+              <td class="fw-600 mono">
+                <a href="{{ url_for('vm.detalle', nombre=maq.nombre) }}"
+                   style="color:var(--c-accent2);text-decoration:none;">{{ maq.nombre }}</a>
+              </td>
+              <td>
+                {% if maq.tipo == 'VDI' %}
+                  <span class="badge badge-vdi">VDI</span>
+                {% else %}
+                  <span class="badge badge-vm">VM</span>
+                {% endif %}
+              </td>
+              <td class="text-sm">{{ maq.pool or '—' }}</td>
+              <td class="text-sm">{{ maq.empresa or '—' }}</td>
+              <td>
+                {% set est = (maq.estado_horizon or '').upper() %}
+                {% if est == 'CONNECTED' %}
+                  <span class="badge badge-connected">Connected</span>
+                {% elif est == 'AVAILABLE' %}
+                  <span class="badge badge-available">Available</span>
+                {% elif est == 'DISCONNECTED' %}
+                  <span class="badge badge-disconnected">Disconnected</span>
+                {% else %}
+                  <span class="badge badge-origen">{{ maq.estado_horizon or '—' }}</span>
+                {% endif %}
+              </td>
+              <td><span class="badge badge-vdi">{{ asig.tipo }}</span></td>
+              <td class="text-sm muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                  title="{{ asig.notas or '' }}">{{ asig.notas or '—' }}</td>
+              <td>
+                <button class="btn btn-danger btn-sm"
+                        onclick="desvincular({{ asig.id }})">✕</button>
+              </td>
+            </tr>
+            {% endif %}
+            {% else %}
+            <tr>
+              <td colspan="8" class="text-muted" style="text-align:center;padding:32px;">
+                Sin VMs asignadas. <button class="btn btn-primary btn-sm" onclick="openVincularModal()">Vincular VM</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Ficha -->
+<div class="modal-overlay hidden" id="modal-editar-ficha"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">✏️ Editar Usuario</h3>
+    <form method="POST" action="{{ url_for('directorio.editar', uid=usuario.id) }}"
+          onsubmit="this.querySelector('[type=submit]').disabled=true">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Username *</label>
+          <input type="text" name="username" class="form-control" value="{{ usuario.username }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" name="nombre_completo" class="form-control" value="{{ usuario.nombre_completo or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" value="{{ usuario.email or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="text" name="telefono" class="form-control" value="{{ usuario.telefono or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Empresa</label>
+          <input type="text" name="empresa" class="form-control" value="{{ usuario.empresa or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departamento</label>
+          <input type="text" name="departamento" class="form-control" value="{{ usuario.departamento or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" name="activo_ad" value="1" {{ 'checked' if usuario.activo_ad else '' }}> Activo en AD
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea name="notas" class="form-control" rows="3">{{ usuario.notas or '' }}</textarea>
+      </div>
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost"
+                onclick="document.getElementById('modal-editar-ficha').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Vincular VM -->
+<div class="modal-overlay hidden" id="modal-vincular-vm"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">🔗 Vincular VM/VDI</h3>
+    <div class="form-group">
+      <label class="form-label">Buscar VM por nombre</label>
+      <input type="text" id="input-buscar-vm" class="form-control" placeholder="Escribí el nombre de la VM..."
+             oninput="buscarVMs(this.value)">
+    </div>
+    <div id="lista-vms-result" style="max-height:220px;overflow-y:auto;margin-bottom:12px;"></div>
+    <div id="vm-seleccionada-info" class="hidden" style="background:var(--c-surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">
+      <div style="font-size:0.8rem;color:var(--c-text3);">VM Seleccionada:</div>
+      <div id="vm-seleccionada-nombre" class="fw-600 mono"></div>
+    </div>
+    <input type="hidden" id="vm-seleccionada-id" value="">
+    <div class="form-group">
+      <label class="form-label">Tipo de Vínculo</label>
+      <select id="vinculo-tipo" class="form-control">
+        <option value="principal">Principal</option>
+        <option value="secundario">Secundario</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas del Vínculo</label>
+      <textarea id="vinculo-notas" class="form-control" rows="2"
+                placeholder="ej. Asignado temporalmente mientras X está de licencia"></textarea>
+    </div>
+    <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost"
+              onclick="document.getElementById('modal-vincular-vm').classList.add('hidden')">Cancelar</button>
+      <button type="button" class="btn btn-primary" onclick="confirmarVincular()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const UID = {{ usuario.id }};
+
+function openEditFicha() {
+  document.getElementById('modal-editar-ficha').classList.remove('hidden');
+}
+
+function openVincularModal() {
+  document.getElementById('input-buscar-vm').value = '';
+  document.getElementById('lista-vms-result').innerHTML = '';
+  document.getElementById('vm-seleccionada-id').value = '';
+  document.getElementById('vm-seleccionada-info').classList.add('hidden');
+  document.getElementById('modal-vincular-vm').classList.remove('hidden');
+}
+
+let searchTimeout = null;
+async function buscarVMs(q) {
+  clearTimeout(searchTimeout);
+  if (q.length < 2) { document.getElementById('lista-vms-result').innerHTML = ''; return; }
+  searchTimeout = setTimeout(async () => {
+    const res = await fetch(`/inventario/?q=${encodeURIComponent(q)}&_json=1`);
+    // fallback: buscar directamente vía API
+    const res2 = await fetch(`/api/maquinas?q=${encodeURIComponent(q)}`);
+    if (!res2.ok) return;
+    const data = await res2.json();
+    const container = document.getElementById('lista-vms-result');
+    if (!data.length) {
+      container.innerHTML = '<div class="text-muted text-sm" style="padding:8px;">Sin resultados.</div>';
+      return;
+    }
+    container.innerHTML = data.map(m => `
+      <div style="padding:8px 12px;border-radius:6px;cursor:pointer;transition:background 0.1s;margin-bottom:2px;border:1px solid var(--c-border);"
+           onmouseover="this.style.background='var(--c-surface2)'"
+           onmouseout="this.style.background=''"
+           onclick="seleccionarVM(${m.id}, '${m.nombre.replace(/'/g,"\\'")}')">
+        <span class="mono fw-600">${m.nombre}</span>
+        <span style="margin-left:8px;font-size:0.75rem;color:var(--c-text3);">${m.tipo} · ${m.pool || ''} · ${m.empresa || ''}</span>
+      </div>
+    `).join('');
+  }, 300);
+}
+
+function seleccionarVM(id, nombre) {
+  document.getElementById('vm-seleccionada-id').value = id;
+  document.getElementById('vm-seleccionada-nombre').textContent = nombre;
+  document.getElementById('vm-seleccionada-info').classList.remove('hidden');
+  document.getElementById('lista-vms-result').innerHTML = '';
+  document.getElementById('input-buscar-vm').value = nombre;
+}
+
+async function confirmarVincular() {
+  const maquinaId = parseInt(document.getElementById('vm-seleccionada-id').value);
+  if (!maquinaId) {
+    Toast.fire({ icon: 'warning', title: 'Seleccioná una VM primero.' });
+    return;
+  }
+  const tipo  = document.getElementById('vinculo-tipo').value;
+  const notas = document.getElementById('vinculo-notas').value.trim();
+
+  const res = await fetch('/directorio/api/vincular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content },
+    body: JSON.stringify({ maquina_id: maquinaId, directorio_usuario_id: UID, tipo, notas })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: 'VM vinculada correctamente.' });
+    document.getElementById('modal-vincular-vm').classList.add('hidden');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al vincular.' });
+  }
+}
+
+async function desvincular(vid) {
+  const result = await SwalDark.fire({
+    title: '¿Desvincular VM?',
+    text: 'Se eliminará el vínculo entre este usuario y la VM.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, desvincular',
+    cancelButtonText: 'Cancelar'
+  });
+  if (!result.isConfirmed) return;
+  const res = await fetch(`/directorio/api/desvincular/${vid}`, { method: 'DELETE', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById(`row-asig-${vid}`)?.remove();
+    Toast.fire({ icon: 'success', title: 'Desvinculado.' });
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error.' });
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Extrayendo...{% endblock %}
+{% block page_title %}⚡ Extracción en Progreso{% endblock %}
+
+{% block content %}
+
+<div style="max-width:800px;margin:0 auto;">
+
+  <div class="card mb-6">
+    <div class="card-header">
+      <h2>Estado de la extracción</h2>
+      <span class="badge badge-connected pulse" id="status-badge">En progreso...</span>
+    </div>
+    <div class="card-body">
+      <div class="mb-4">
+        <div class="d-flex align-center gap-2 mb-4">
+          <div class="text-sm text-muted" id="progress-label">Iniciando...</div>
+          <div class="text-sm text-muted" id="progress-pct" style="margin-left:auto;font-weight:600;"></div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="log-terminal" id="log-terminal">Conectando al servidor...\n</div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2" style="justify-content:flex-end;">
+    <a href="{{ url_for('inventario.extraer_form') }}" class="btn btn-ghost">← Nueva extracción</a>
+    <a href="{{ url_for('inventario.index') }}" class="btn btn-outline" id="btn-ver-resultado" style="display:none;">
+      Ver Inventario →
+    </a>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const jobId   = "{{ job_id }}";
+const log     = document.getElementById('log-terminal');
+const fill    = document.getElementById('progress-fill');
+const label   = document.getElementById('progress-label');
+const pctEl   = document.getElementById('progress-pct');
+const badge   = document.getElementById('status-badge');
+const btnVer  = document.getElementById('btn-ver-resultado');
+
+const es = new EventSource(`/inventario/stream/${jobId}`);
+
+es.onmessage = (e) => {
+  const event = JSON.parse(e.data);
+
+  if (event.tipo === 'log') {
+    log.textContent += event.msg + '\n';
+    log.scrollTop = log.scrollHeight;
+  }
+  else if (event.tipo === 'progress') {
+    label.textContent = event.msg;
+  }
+  else if (event.tipo === 'pct') {
+    const pct = parseInt(event.msg);
+    fill.style.width = pct + '%';
+    pctEl.textContent = pct + '%';
+  }
+  else if (event.tipo === 'done') {
+    es.close();
+    fill.style.width = '100%';
+    pctEl.textContent = '100%';
+    badge.textContent = '✓ Completado';
+    badge.className   = 'badge badge-connected';
+    label.textContent = 'Extracción completada';
+    btnVer.style.display = '';
+    // Redirigir automáticamente en 2s
+    setTimeout(() => {
+      window.location.href = event.msg || '/inventario';
+    }, 2000);
+  }
+  else if (event.tipo === 'error') {
+    es.close();
+    badge.textContent = '✗ Error';
+    badge.className   = 'badge badge-error';
+    label.textContent = 'Error: ' + event.msg;
+    log.textContent += '\n[ERROR] ' + event.msg;
+  }
+};
+
+es.onerror = () => {
+  log.textContent += '\n[Conexión cerrada]';
+};
+</script>
+{% endblock %}

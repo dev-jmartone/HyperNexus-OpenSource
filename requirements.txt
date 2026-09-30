@@ -1,0 +1,55 @@
+# Inventario VDI — dependencias de la app web (Flask + React vía dist/ ya buildeado).
+# Generado a partir de imports reales de web/ y core/*_rest.py (sin PowerCLI/Tkinter,
+# esos quedaron en Archive/legacy_desktop/requirements-legacy.txt).
+
+# --- Framework web ---
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.1.0
+Flask-WTF==1.2.2
+Werkzeug==3.1.8
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+itsdangerous==2.2.0
+blinker==1.9.0
+click==8.4.2
+colorama==0.4.6
+
+# --- Base de datos / ORM ---
+SQLAlchemy==2.0.51
+alembic==1.18.5
+greenlet==3.5.4
+Mako==1.3.12
+
+# --- Servidor de producción ---
+waitress==3.0.2
+
+# --- Seguridad ---
+# Versiones mínimas por CVEs conocidos en 43.0.3/1.0.1 (ver docs/informe_seguridad_2026-08-10.md)
+cryptography==50.0.0
+python-dotenv==1.2.2
+Flask-Limiter==4.1.1
+
+# --- Caché / jobs distribuidos (SSE multi-worker) ---
+redis==5.2.1
+
+# --- Reportes Excel (web/routes/reportes.py) ---
+openpyxl==3.1.5
+pandas==3.0.3
+numpy==2.5.1
+et_xmlfile==2.0.0
+
+# --- Integración Active Directory / Outlook (web/routes/directorio.py) ---
+pywin32==312
+
+# --- SOAP vCenter (VM Notes/Annotation, no expuesto por la REST Automation API pública,
+# ver core/vcenter_soap.py) ---
+pyvmomi==9.1.0.0
+
+# --- Utilidades ---
+python-dateutil==2.9.0.post0
+packaging==26.2
+setuptools==83.0.0
+six==1.17.0
+typing_extensions==4.16.0
+tzdata==2026.3

@@ -1,0 +1,28 @@
+<div class="form-group">
+  <label class="form-label">Usuario *</label>
+  <input type="text" name="username" id="f-username" class="form-control" placeholder="ej. jperez" required>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="form-group">
+    <label class="form-label">Nombre Completo</label>
+    <input type="text" name="nombre_completo" id="f-nombre-completo" class="form-control" placeholder="ej. Juan Pérez">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Email</label>
+    <input type="email" name="email" id="f-email" class="form-control" placeholder="ej. jperez@empresa.com">
+  </div>
+</div>
+<div class="form-group">
+  <label class="form-label">Rol *</label>
+  <select name="rol" id="f-rol" class="form-control" required>
+    <option value="usuario">usuario — Acceso de lectura y extracción</option>
+    <option value="admin">admin — Acceso completo y administración</option>
+  </select>
+</div>
+<div class="form-group">
+  <label class="form-label">Contraseña</label>
+  <input type="password" name="password" id="f-password" class="form-control" placeholder="Por defecto: 1234">
+  <div class="text-muted text-sm mt-1">
+    Dejar vacío para usar contraseña por defecto (<strong>1234</strong>). El usuario deberá cambiarla al primer inicio de sesión.
+  </div>
+</div>

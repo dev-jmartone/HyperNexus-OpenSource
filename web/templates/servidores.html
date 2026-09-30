@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Servidores{% endblock %}
+{% block page_title %}🖧 Gestión de Servidores{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-nuevo').classList.remove('hidden')">
+  + Nuevo Servidor
+</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-6">
+  <div class="card-header">
+    <h2>Servidores registrados</h2>
+    <span class="text-muted text-sm">{{ servidores|length }} servidor(es)</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Host</th>
+          <th>Tipo</th>
+          <th>Máquinas</th>
+          <th>Origen</th>
+          <th>Dominio</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for srv in servidores %}
+        <tr>
+          <td class="fw-600">{{ srv.nombre }}</td>
+          <td class="mono text-sm">{{ srv.host }}</td>
+          <td>
+            <span class="badge {% if srv.tipo == 'horizon' %}badge-vdi{% else %}badge-vm{% endif %}">
+              {{ srv.tipo.upper() }}
+            </span>
+          </td>
+          <td>
+            <span class="badge badge-connected">{{ srv.tipo_maquina }}</span>
+          </td>
+          <td>
+            {% if srv.origen %}
+              <span class="badge badge-origen">{{ srv.origen.upper() }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-sm muted">{{ srv.dominio or '—' }}</td>
+          <td>
+            {% if srv.activo %}
+              <span class="badge badge-connected">● Activo</span>
+            {% else %}
+              <span class="badge badge-disconnected">○ Inactivo</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-2">
+              <button class="btn btn-ghost btn-sm"
+                      data-id="{{ srv.id }}"
+                      data-nombre="{{ srv.nombre }}"
+                      data-host="{{ srv.host }}"
+                      data-tipo="{{ srv.tipo }}"
+                      data-tipo-maquina="{{ srv.tipo_maquina }}"
+                      data-origen="{{ srv.origen or '' }}"
+                      data-dominio="{{ srv.dominio or '' }}"
+                      data-activo="{{ '1' if srv.activo else '0' }}"
+                      onclick="openEditServerFromBtn(this)">
+                ✏️ Editar
+              </button>
+              <form method="POST" id="form-delete-srv-{{ srv.id }}" action="{{ url_for('servidores.eliminar', sid=srv.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="button" class="btn btn-danger btn-sm"
+                        onclick="confirmDelete('¿Eliminar servidor {{ srv.nombre }}?', 'Se eliminará la configuración de este servidor.', () => document.getElementById('form-delete-srv-{{ srv.id }}').submit())">
+                  🗑
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="text-align:center;padding:40px;" class="text-muted">
+            Sin servidores registrados.
+            <button class="btn btn-primary btn-sm" style="margin-left:12px;"
+                    onclick="document.getElementById('modal-nuevo').classList.remove('hidden')">
+              + Agregar servidor
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Info tipos -->
+<div class="card">
+  <div class="card-header"><h2>📖 Guía de configuración</h2></div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+      <div>
+        <h3 class="text-sm fw-600 mb-4">Tipo de Servidor</h3>
+        <div class="d-flex gap-2 mb-4"><span class="badge badge-vdi">HORIZON</span> <span class="text-sm">Servidor VMware Horizon (VDI)</span></div>
+        <div class="d-flex gap-2"><span class="badge badge-vm">VCENTER</span> <span class="text-sm">Servidor VMware vCenter (VMs)</span></div>
+      </div>
+      <div>
+        <h3 class="text-sm fw-600 mb-4">Tipo de Máquinas</h3>
+        <div class="d-flex gap-2 mb-4"><span class="badge badge-vdi">VDI</span> <span class="text-sm">Todas las máquinas de este servidor son VDI</span></div>
+        <div class="d-flex gap-2 mb-4"><span class="badge badge-vm">VM</span> <span class="text-sm">Todas las máquinas son VMs convencionales</span></div>
+        <div class="d-flex gap-2"><span class="badge badge-connected">ambos</span> <span class="text-sm">Se detecta por nombre de pool</span></div>
+      </div>
+      <div>
+        <h3 class="text-sm fw-600 mb-4">Origen</h3>
+        {% for o in origenes %}
+          {% if o %}
+          <div class="d-flex gap-2 mb-4"><span class="badge badge-origen">{{ o.upper() }}</span></div>
+          {% endif %}
+        {% endfor %}
+        <div class="text-muted text-sm">Identifica la zona/segmento de red</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Nuevo ─────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-nuevo" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">➕ Nuevo Servidor</h3>
+    <form method="POST" action="{{ url_for('servidores.crear') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include "_form_servidor.html" %}
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-nuevo').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Modal Editar ────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-editar" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">✏️ Editar Servidor</h3>
+    <form method="POST" id="form-editar" action="">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include "_form_servidor.html" %}
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" name="activo" id="edit-activo"> Activo
+        </label>
+      </div>
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-editar').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditServerFromBtn(btn) {
+  const ds = btn.dataset;
+  const modal = document.getElementById('modal-editar');
+  const form  = document.getElementById('form-editar');
+  form.action = `/servidores/${ds.id}/editar`;
+
+  form.querySelector('[name="nombre"]').value       = ds.nombre;
+  form.querySelector('[name="host"]').value         = ds.host;
+  form.querySelector('[name="tipo"]').value         = ds.tipo;
+  form.querySelector('[name="tipo_maquina"]').value = ds.tipoMaquina;
+  form.querySelector('[name="origen"]').value       = ds.origen || '';
+  form.querySelector('[name="dominio"]').value      = ds.dominio || '';
+  document.getElementById('edit-activo').checked    = (ds.activo === '1');
+
+  modal.classList.remove('hidden');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Inventario VDI{% endblock %} — Inventario VDI</title>
+  <meta name="description" content="Sistema de inventario VDI y VM - Horizon & vCenter">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon" title="Inventario VDI">🖥️</div>
+    <div class="logo-text">
+      <h1>Inventario VDI</h1>
+      <span>Horizon &amp; vCenter</span>
+    </div>
+    <button class="sidebar-toggle" id="sidebar-toggle-btn"
+            onclick="toggleSidebar()" title="Contraer/Expandir menú">&#x2630;</button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section"><span class="nav-section-title">General</span></div>
+    <a href="{{ url_for('dashboard.index') }}"
+       class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}"
+       title="Dashboard" data-tooltip="Dashboard">
+      <span class="icon">📊</span> <span class="nav-label">Dashboard</span>
+    </a>
+
+    <div class="nav-section"><span class="nav-section-title">Extracción</span></div>
+    <a href="{{ url_for('inventario.extraer_form') }}"
+       class="nav-link {% if request.endpoint and 'inventario.extraer' in request.endpoint %}active{% endif %}"
+       title="Extraer Datos" data-tooltip="Extraer Datos">
+      <span class="icon">⚡</span> <span class="nav-label">Extraer Datos</span>
+    </a>
+    <a href="{{ url_for('inventario.index') }}"
+       class="nav-link {% if request.endpoint == 'inventario.index' %}active{% endif %}"
+       title="Inventario" data-tooltip="Inventario">
+      <span class="icon">🗄️</span> <span class="nav-label">Inventario</span>
+    </a>
+    <a href="{{ url_for('inventario.actividad') }}"
+       class="nav-link {% if request.endpoint == 'inventario.actividad' %}active{% endif %}"
+       title="Actividad y Novedades" data-tooltip="Actividad">
+      <span class="icon">⚡</span> <span class="nav-label">Actividad y Novedades</span>
+    </a>
+
+
+    <div class="nav-section"><span class="nav-section-title">Usuarios</span></div>
+    <a href="{{ url_for('directorio.index') }}"
+       class="nav-link {% if request.endpoint and 'directorio' in request.endpoint %}active{% endif %}"
+       title="Directorio de Usuarios" data-tooltip="Directorio">
+      <span class="icon">👥</span> <span class="nav-label">Directorio</span>
+    </a>
+
+    <div class="nav-section"><span class="nav-section-title">Configuración</span></div>
+    <a href="{{ url_for('servidores.index') }}"
+       class="nav-link {% if request.endpoint and 'servidores' in request.endpoint %}active{% endif %}"
+       title="Servidores" data-tooltip="Servidores">
+      <span class="icon">🖧</span> <span class="nav-label">Servidores</span>
+    </a>
+
+    <div class="nav-section"><span class="nav-section-title">Reportes</span></div>
+    <a href="{{ url_for('reportes.index') }}"
+       class="nav-link {% if request.endpoint and 'reportes' in request.endpoint %}active{% endif %}"
+       title="Reportes Excel" data-tooltip="Reportes Excel">
+      <span class="icon">📥</span> <span class="nav-label">Reportes Excel</span>
+    </a>
+
+    {% if current_user and current_user.rol == 'admin' %}
+    <div class="nav-section"><span class="nav-section-title">Administración</span></div>
+    <a href="{{ url_for('auth.usuarios') }}"
+       class="nav-link {% if request.endpoint == 'auth.usuarios' %}active{% endif %}"
+       title="Usuarios App" data-tooltip="Usuarios App">
+      <span class="icon">👤</span> <span class="nav-label">Usuarios App</span>
+    </a>
+    <a href="{{ url_for('auth.auditoria') }}"
+       class="nav-link {% if request.endpoint == 'auth.auditoria' %}active{% endif %}"
+       title="Auditoría" data-tooltip="Auditoría">
+      <span class="icon">🔍</span> <span class="nav-label">Auditoría</span>
+    </a>
+    {% endif %}
+  </nav>
+
+  <div class="sidebar-footer">
+    {% if current_user %}
+    <div class="user-profile">
+      <div class="avatar" title="{{ current_user.username }} ({{ current_user.rol }})">
+        {{ current_user.username[0].upper() }}
+      </div>
+      <div class="footer-text">
+        <div class="username-text">{{ current_user.username }}</div>
+        <div class="role-text">{{ current_user.rol }}</div>
+      </div>
+    </div>
+    <a href="{{ url_for('auth.logout') }}" class="logout-link" title="Cerrar sesión" data-tooltip="Cerrar sesión">
+      <span class="icon">🚪</span>
+      <span class="footer-text">Cerrar sesión</span>
+    </a>
+    {% endif %}
+    <div class="footer-text mt-2 brand-ver">v3.1 &nbsp;·&nbsp; VDI Inventory Hub</div>
+  </div>
+</aside>
+
+<!-- ── Main ────────────────────────────────────────────────────── -->
+<main class="main-content">
+  <div class="topbar">
+    <h2 class="topbar-title">{% block page_title %}{% endblock %}</h2>
+    <div class="topbar-actions">
+      <!-- Indicador de Extracción Activa en Tiempo Real -->
+      <a href="#" id="active-job-badge" class="badge hidden" style="background:rgba(59,130,246,0.15);border:1px solid var(--c-accent);color:var(--c-accent2);text-decoration:none;padding:5px 12px;display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;font-weight:600;border-radius:20px;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c-accent);box-shadow:0 0 8px var(--c-accent);"></span>
+        <span id="active-job-text">⚡ Extracción en progreso...</span>
+      </a>
+
+      <!-- Reloj de Token vCenter -->
+      <button type="button" class="btn btn-outline btn-sm" id="btn-token-clock" onclick="promptvCenterCredentials()">
+        <span id="token-clock-icon">🔑</span>
+        <span id="token-clock-text">vCenter: Sin Credenciales</span>
+      </button>
+
+      {% block topbar_actions %}{% endblock %}
+    </div>
+  </div>
+
+  <div class="page-content fade-in">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+  const SwalDark = Swal.mixin({
+    background: '#111827',
+    color: '#f1f5f9',
+    confirmButtonColor: '#3b82f6',
+    cancelButtonColor: '#ef4444',
+  });
+
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 4000,
+    timerProgressBar: true,
+    background: '#1e293b',
+    color: '#f8fafc'
+  });
+
+  // ── Polling de Extracción Activa ─────────────────────────────────
+  async function checkActiveJob() {
+    try {
+      const res = await fetch('/inventario/api/active_job');
+      const data = await res.json();
+      const badge = document.getElementById('active-job-badge');
+      const text = document.getElementById('active-job-text');
+      if (badge && data.ok && data.active && data.job) {
+        const job = data.job;
+        text.textContent = `⚡ Extracción en progreso (${job.pct || 0}%) — Ver Progreso`;
+        badge.href = `/inventario/progreso/${job.job_id}`;
+        badge.classList.remove('hidden');
+      } else if (badge) {
+        badge.classList.add('hidden');
+      }
+    } catch (e) {}
+  }
+  setInterval(checkActiveJob, 3500);
+  checkActiveJob();
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        Toast.fire({
+          icon: "{{ 'error' if category == 'error' else ('success' if category == 'success' else 'info') }}",
+          title: {{ msg|tojson }}
+        });
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  function confirmDelete(title, text, callback) {
+    SwalDark.fire({
+      title: title || '¿Confirmar eliminación?',
+      text: text || 'Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        callback();
+      }
+    });
+  }
+
+  // ── Reloj de Token vCenter & Gestión de Credenciales en Memoria ─────
+  let remainingTokenSeconds = 0;
+  let tokenTimerInterval = null;
+
+  async function checkTokenStatus() {
+    try {
+      const res = await fetch('/servidores/api/credenciales/status');
+      const data = await res.json();
+      if (data.active && data.remaining_seconds > 0) {
+        remainingTokenSeconds = data.remaining_seconds;
+        startTokenClock(data.usuario);
+      } else {
+        showTokenExpiredState();
+      }
+    } catch (e) {
+      showTokenExpiredState();
+    }
+  }
+
+  function startTokenClock(usuario) {
+    if (tokenTimerInterval) clearInterval(tokenTimerInterval);
+    updateClockDisplay(usuario);
+
+    tokenTimerInterval = setInterval(() => {
+      remainingTokenSeconds--;
+      if (remainingTokenSeconds <= 0) {
+        clearInterval(tokenTimerInterval);
+        showTokenExpiredState();
+        Toast.fire({ icon: 'warning', title: 'Token de vCenter vencido. Haz clic para renovar.' });
+      } else {
+        updateClockDisplay(usuario);
+      }
+    }, 1000);
+  }
+
+  function updateClockDisplay(usuario) {
+    const mins = Math.floor(remainingTokenSeconds / 60);
+    const secs = remainingTokenSeconds % 60;
+    const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const btn = document.getElementById('btn-token-clock');
+    document.getElementById('token-clock-icon').textContent = '⏱️';
+    document.getElementById('token-clock-text').textContent = `vCenter (${usuario}): ${timeStr}`;
+    btn.style.borderColor = 'rgba(16,185,129,0.5)';
+    btn.style.color = 'var(--c-green)';
+  }
+
+  function showTokenExpiredState() {
+    const btn = document.getElementById('btn-token-clock');
+    document.getElementById('token-clock-icon').textContent = '⚠️';
+    document.getElementById('token-clock-text').textContent = 'vCenter: Token Vencido / Ingresar Clave';
+    btn.style.borderColor = 'rgba(239,68,68,0.5)';
+    btn.style.color = 'var(--c-red)';
+  }
+
+  function promptvCenterCredentials() {
+    const userEmail = "{{ current_user.email or current_user.username if current_user else '' }}";
+    SwalDark.fire({
+      title: '🔑 Credenciales vCenter / Horizon',
+      customClass: { popup: 'vcenter-swal-popup' },
+      heightAuto: false,
+      html: `
+        <div style="text-align:left;" class="mt-2">
+          <div class="form-group">
+            <label class="form-label">Usuario Infraestructura / Red *</label>
+            <input type="text" id="swal-user" class="form-control" value="${userEmail}" placeholder="ej. usuario@empresa.com o jdoe" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña vCenter / Horizon *</label>
+            <input type="password" id="swal-pwd" class="form-control" placeholder="••••••••" required autofocus>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Duración de la Sesión</label>
+            <select id="swal-ttl" class="form-control">
+              <option value="1800" selected>30 Minutos</option>
+              <option value="3600">1 Hora</option>
+              <option value="7200">2 Horas</option>
+            </select>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '💾 Activar Sesión',
+      cancelButtonText: 'Cancelar',
+      focusConfirm: false,
+      didOpen: () => {
+        const pInput = document.getElementById('swal-pwd');
+        if (pInput) pInput.focus();
+      },
+      preConfirm: () => {
+        const user = document.getElementById('swal-user').value.trim();
+        const pwd = document.getElementById('swal-pwd').value.trim();
+        const ttl = parseInt(document.getElementById('swal-ttl').value);
+        if (!user || !pwd) {
+          Swal.showValidationMessage('Usuario y contraseña requeridos');
+          return false;
+        }
+        return { usuario: user, password: pwd, ttl: ttl };
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const res = await fetch('/servidores/api/credenciales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content },
+          body: JSON.stringify(result.value)
+        });
+        const data = await res.json();
+        if (data.ok) {
+          remainingTokenSeconds = data.expires_in;
+          startTokenClock(data.usuario);
+          Toast.fire({ icon: 'success', title: 'Sesión vCenter activada con éxito.' });
+        } else {
+          Toast.fire({ icon: 'error', title: data.error || 'Error al guardar credenciales' });
+        }
+      }
+    });
+  }
+
+  // ── Sidebar Toggle con persistencia localStorage ───────────────────
+  function toggleSidebar() {
+    document.body.classList.toggle('sidebar-collapsed');
+    const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+    // Rotar ícono del botón
+    const btn = document.getElementById('sidebar-toggle-btn');
+    if (btn) btn.textContent = isCollapsed ? '\u2630' : '\u2715';
+  }
+
+  function initSidebarState() {
+    const saved = localStorage.getItem('sidebar_collapsed');
+    // Default: expandido
+    if (saved === '1') {
+      document.body.classList.add('sidebar-collapsed');
+      const btn = document.getElementById('sidebar-toggle-btn');
+      if (btn) btn.textContent = '\u2630';
+    }
+  }
+  initSidebarState();
+
+  // Verificar estado del token al cargar la página
+  checkTokenStatus();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

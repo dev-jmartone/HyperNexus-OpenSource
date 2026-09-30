@@ -1,0 +1,4 @@
+# Dependencias de testing (backend) — no se instalan en producción.
+# Uso: pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1
+pytest-flask==1.3.0

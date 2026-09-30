@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block page_title %}📥 Reportes Excel{% endblock %}
+
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start;">
+
+  <!-- Lista de archivos -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Reportes generados</h2>
+      <span class="text-muted text-sm">{{ archivos|length }} archivo(s)</span>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Tamaño</th>
+            <th>Fecha</th>
+            <th>Descargar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for arch in archivos %}
+          <tr>
+            <td class="mono text-sm">{{ arch.nombre }}</td>
+            <td class="muted text-sm">{{ arch.size_kb }} KB</td>
+            <td class="muted text-sm">{{ arch.fecha }}</td>
+            <td>
+              <a href="{{ url_for('reportes.descargar', nombre=arch.nombre) }}"
+                 class="btn btn-success btn-sm">
+                ⬇ Descargar
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" style="text-align:center;padding:32px;" class="text-muted">
+              Sin reportes generados todavía.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Panel generación -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-header"><h2>📋 Generar Nuevo Reporte</h2></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('reportes.generar') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group">
+            <label class="form-label">Filtrar por Tipo</label>
+            <select name="tipo" class="form-control">
+              <option value="">Todos (VDI + VM)</option>
+              <option value="VDI">Solo VDI</option>
+              <option value="VM">Solo VM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filtrar por Origen</label>
+            <select name="origen" class="form-control">
+              <option value="">Todos</option>
+              {% for srv in servidores %}
+                {% if srv.origen %}
+                <option value="{{ srv.origen }}">{{ srv.origen.upper() }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filtrar por Servidor</label>
+            <select name="servidor_id" class="form-control">
+              <option value="">Todos</option>
+              {% for srv in servidores %}
+              <option value="{{ srv.id }}">{{ srv.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-success" style="width:100%;">
+            📊 Generar y Descargar
+          </button>
+        </form>
+
+        <div class="mt-4 text-sm text-muted" style="line-height:1.7;">
+          <strong>El Excel incluye:</strong>
+          <ul style="padding-left:16px;margin-top:6px;">
+            <li>Resumen Ejecutivo (KPIs)</li>
+            <li>Hoja VDI (solo VDI)</li>
+            <li>Hoja VM (solo VM)</li>
+            <li>Inventario Completo</li>
+            <li>Por Servidor</li>
+            <li>Por Empresa</li>
+            <li>Por Pool</li>
+            <li>Por Origen (dt/su/core/mz)</li>
+            <li>Alertas (multi-VDI, huérfanas)</li>
+            <li>Cambios / Delta</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historial snapshots -->
+    <div class="card">
+      <div class="card-header"><h2>📈 Historial de Snapshots</h2></div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Servidor</th><th>Fecha</th><th>VMs</th><th>Estado</th></tr></thead>
+          <tbody>
+            {% for snap in snapshots %}
+            <tr>
+              <td class="text-sm fw-600">{{ snap.servidor.nombre if snap.servidor else '—' }}</td>
+              <td class="mono text-sm muted">{{ snap.timestamp.strftime('%d/%m %H:%M') }}</td>
+              <td class="text-sm">{{ snap.total_vms }}</td>
+              <td>
+                {% if snap.estado == 'ok' %}
+                  <span class="badge badge-connected">OK</span>
+                {% else %}
+                  <span class="badge badge-error" title="{{ snap.error_msg }}">Error</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

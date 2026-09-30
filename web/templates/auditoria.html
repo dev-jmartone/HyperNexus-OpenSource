@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Auditoría{% endblock %}
+{% block page_title %}🔍 Registro de Auditoría{% endblock %}
+
+{% block content %}
+
+<!-- Filtros -->
+<div class="filter-bar mb-6">
+  <form method="GET" action="{{ url_for('auth.auditoria') }}" style="display:contents;">
+    <div class="form-group">
+      <label class="form-label">Acción</label>
+      <select name="accion" class="form-control" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for a in acciones_disponibles %}
+        <option value="{{ a }}" {% if filtros.accion == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Usuario</label>
+      <input type="text" name="username" class="form-control" placeholder="Filtrar por usuario..."
+             value="{{ filtros.username }}">
+    </div>
+    <div class="form-group" style="flex:0;">
+      <label class="form-label">&nbsp;</label>
+      <button type="submit" class="btn btn-outline">Filtrar</button>
+    </div>
+    <div class="form-group" style="flex:0;">
+      <label class="form-label">&nbsp;</label>
+      <a href="{{ url_for('auth.auditoria') }}" class="btn btn-ghost">✕</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Eventos registrados</h2>
+    <span class="text-muted text-sm">{{ total }} evento(s) &nbsp;·&nbsp; Página {{ page }}/{{ pages }}</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha/Hora</th>
+          <th>Usuario</th>
+          <th>Acción</th>
+          <th>Recurso</th>
+          <th>Detalle</th>
+          <th>IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="mono text-sm muted">{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td class="fw-600 text-sm">{{ log.username or '—' }}</td>
+          <td>
+            {% set a = log.accion %}
+            {% if 'login' in a %}
+              <span class="badge badge-connected">{{ a }}</span>
+            {% elif 'eliminar' in a or 'delete' in a %}
+              <span class="badge badge-error">{{ a }}</span>
+            {% elif 'crear' in a or 'create' in a %}
+              <span class="badge badge-vdi">{{ a }}</span>
+            {% elif 'editar' in a or 'edit' in a %}
+              <span class="badge badge-available">{{ a }}</span>
+            {% elif 'extraer' in a %}
+              <span class="badge badge-vm">{{ a }}</span>
+            {% else %}
+              <span class="badge badge-origen">{{ a }}</span>
+            {% endif %}
+          </td>
+          <td class="text-sm mono">{{ log.recurso or '—' }}</td>
+          <td class="text-sm muted">{{ log.detalle or '' }}</td>
+          <td class="mono text-sm muted">{{ log.ip_origen or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" style="text-align:center;padding:32px;" class="text-muted">
+            Sin eventos de auditoría registrados.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginación -->
+  {% if pages > 1 %}
+  <div style="padding:16px 20px;display:flex;gap:8px;align-items:center;">
+    {% if page > 1 %}
+    <a href="{{ url_for('auth.auditoria', page=page-1, accion=filtros.accion, username=filtros.username) }}"
+       class="btn btn-ghost btn-sm">← Anterior</a>
+    {% endif %}
+    <span class="text-muted text-sm">{{ page }} / {{ pages }}</span>
+    {% if page < pages %}
+    <a href="{{ url_for('auth.auditoria', page=page+1, accion=filtros.accion, username=filtros.username) }}"
+       class="btn btn-ghost btn-sm">Siguiente →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

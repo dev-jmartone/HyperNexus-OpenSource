@@ -1,0 +1,57 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# node
+web/frontend/node_modules
+node_modules
+
+# Caches de desarrollo y scripts temporales
+data/*.bak*
+data/_ad_query_*
+
+# Carpetas de reportes e inventarios
+reportes/*
+!reportes/README.md
+
+# Archivos de datos generados localmente
+*.csv
+*.xlsx
+
+# Entornos virtuales / Builds
+.venv/
+venv/
+ENV/
+env/
+/dist/
+/build/
+!web/frontend/dist/
+Archive/legacy_desktop/.venv/
+
+# Variables de entorno con secretos reales
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Git portable local
+.git-portable/
+
+# Agentes
+.agents
+
+
+#Omitidos
+.tmp-cbm
+Archive
+.orchestrator
+.claude
+.pytest_cache

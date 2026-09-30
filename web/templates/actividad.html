@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Actividad y Novedades por Servidor — Inventario VDI{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-between align-center">
+  <div>
+    <h1 class="page-title">⚡ Actividad y Novedades por Servidor</h1>
+    <p class="page-subtitle">Seguimiento detallado de VMs nuevas, inicios de sesión, desinstalaciones y estado por servidor.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline" onclick="cargarNovedades()">🔄 Actualizar Eventos</button>
+  </div>
+</div>
+
+<!-- ── Tarjetas por Servidor ────────────────────────────────────────── -->
+<h3 style="font-size:1.05rem; font-weight:600; margin-bottom:12px; color:var(--c-text);">🖧 Resumen de Actividad por Servidor</h3>
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px; margin-bottom:24px;">
+  {% for st in srv_stats %}
+  <div class="card" style="padding:16px; border-left:4px solid var(--c-accent);">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+      <div>
+        <div style="font-weight:700; font-size:1.05rem;">{{ st.servidor.nombre }}</div>
+        <div class="text-muted text-sm">{{ st.servidor.origen.upper() if st.servidor.origen else '' }} · {{ st.servidor.host }}</div>
+      </div>
+      <span class="badge badge-origen">{{ st.servidor.tipo.upper() }}</span>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; text-align:center; background:rgba(255,255,255,0.03); padding:10px; border-radius:var(--radius-sm);">
+      <div>
+        <div style="font-size:1.2rem; font-weight:700; color:var(--c-text);">{{ st.total }}</div>
+        <div style="font-size:0.7rem; color:var(--c-text-muted);">VMs Totales</div>
+      </div>
+      <div>
+        <div style="font-size:1.2rem; font-weight:700; color:#10B981;">+{{ st.nuevas }}</div>
+        <div style="font-size:0.7rem; color:var(--c-text-muted);">Nuevas (3d)</div>
+      </div>
+      <div>
+        <div style="font-size:1.2rem; font-weight:700; color:#6366F1;">{{ st.connected }}</div>
+        <div style="font-size:0.7rem; color:var(--c-text-muted);">Conectados</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Filtros de Actividad ─────────────────────────────────────────── -->
+<div class="card p-3 mb-4" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+  <div class="form-group mb-0" style="flex:1; min-width:200px;">
+    <input type="text" id="act-search" class="form-control" placeholder="🔍 Buscar por VM, usuario, servidor, pool..." oninput="filtrarEventos()">
+  </div>
+  <div class="form-group mb-0">
+    <select id="act-tipo" class="form-control" onchange="filtrarEventos()">
+      <option value="">Todos los eventos</option>
+      <option value="creacion">🆕 VMs Nuevas / Creadas</option>
+      <option value="login">🟢 Inicios de Sesión (Logins)</option>
+      <option value="logout">🟡 Cierres de Sesión (Logouts)</option>
+      <option value="eliminacion">🔴 VMs Eliminadas / Inactivas</option>
+    </select>
+  </div>
+  <div class="form-group mb-0">
+    <select id="act-servidor" class="form-control" onchange="filtrarEventos()">
+      <option value="">Todos los Servidores</option>
+      {% for s in servidores %}
+      <option value="{{ s.nombre }}">{{ s.nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- ── Tabla / Feed de Novedades y Eventos ────────────────────────── -->
+<div class="card">
+  <div class="card-header d-flex align-between align-center">
+    <div style="font-weight:600;">📋 Feed de Eventos Detallados</div>
+    <span class="text-muted text-sm" id="lbl-total-eventos">Cargando eventos...</span>
+  </div>
+  <div class="table-wrapper">
+    <table id="tabla-actividad">
+      <thead>
+        <tr>
+          <th>Fecha / Hora</th>
+          <th>Evento</th>
+          <th>Servidor / Origen</th>
+          <th>Nombre VM</th>
+          <th>Usuario Logueado / Asignado</th>
+          <th>Primera Aparición en Sistema</th>
+          <th>Clasificación</th>
+          <th>Detalles</th>
+        </tr>
+      </thead>
+      <tbody id="actividad-body">
+        <tr>
+          <td colspan="8" style="text-align:center; padding:30px;" class="text-muted">Cargando novedades en tiempo real...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let todosLosEventos = [];
+
+async function cargarNovedades() {
+  const tbody = document.getElementById('actividad-body');
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px;" class="text-muted">Cargando eventos...</td></tr>';
+  
+  try {
+    const resp = await fetch('/api/novedades');
+    const data = await resp.json();
+    todosLosEventos = data.todos || [];
+    filtrarEventos();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--c-danger); padding:20px;">Error al cargar eventos: ${err.message}</td></tr>`;
+  }
+}
+
+function filtrarEventos() {
+  const q = document.getElementById('act-search').value.toLowerCase().trim();
+  const tipo = document.getElementById('act-tipo').value;
+  const srv = document.getElementById('act-servidor').value;
+
+  const filtrados = todosLosEventos.filter(ev => {
+    if (tipo && ev.tipo !== tipo) return false;
+    if (srv && ev.servidor !== srv) return false;
+    if (q) {
+      const txt = [ev.nombre_vm, ev.servidor, ev.usuario, ev.detalle, ev.origen, ev.pool].join(' ').toLowerCase();
+      if (!txt.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('lbl-total-eventos').innerText = `${filtrados.length} eventos encontrados`;
+  renderEventos(filtrados);
+}
+
+function renderEventos(lista) {
+  const tbody = document.getElementById('actividad-body');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px;" class="text-muted">No se encontraron eventos coincidentes.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = lista.map(ev => {
+    let badgeBg = '#6B7280';
+    if (ev.badge === 'NUEVA') badgeBg = '#10B981';
+    if (ev.badge === 'LOGIN') badgeBg = '#6366F1';
+    if (ev.badge === 'LOGOUT') badgeBg = '#F59E0B';
+    if (ev.badge === 'ELIMINADA' || ev.badge === 'INACTIVA') badgeBg = '#EF4444';
+
+    const esNuevaReal = ev.es_nueva_real;
+    const tagClasificacion = esNuevaReal 
+      ? `<span class="badge" style="background:rgba(16,185,129,0.2); border:1px solid #10B981; color:#34D399;">🆕 VM Creada Reciente</span>`
+      : `<span class="badge" style="background:rgba(99,102,241,0.15); border:1px solid #6366F1; color:#818CF8;">ℹ️ VM Existente Previa</span>`;
+
+    return `
+      <tr>
+        <td class="mono text-sm muted">${ev.fecha}</td>
+        <td>
+          <span class="badge" style="background:${badgeBg}; color:#fff; font-size:0.72rem;">${ev.badge}</span>
+        </td>
+        <td>
+          <strong>${ev.servidor || '—'}</strong>
+          <span class="text-muted text-sm">(${ev.origen || 'vCenter/Horizon'})</span>
+        </td>
+        <td class="mono fw-600 text-sm">
+          <a href="/inventario/vm/${encodeURIComponent(ev.nombre_vm)}" style="color:var(--c-accent2); text-decoration:none;">
+            ${ev.nombre_vm}
+          </a>
+        </td>
+        <td class="text-sm">
+          ${ev.usuario ? `<span style="color:var(--c-text); font-weight:600;">👤 ${ev.usuario}</span>` : '<span class="text-muted">—</span>'}
+        </td>
+        <td class="mono text-sm muted">
+          ${ev.primera_deteccion || '—'}
+        </td>
+        <td>
+          ${tagClasificacion}
+        </td>
+        <td class="text-sm muted">
+          ${ev.detalle}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', cargarNovedades);
+</script>
+{% endblock %}

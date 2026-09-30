@@ -1,0 +1,45 @@
+<div class="form-group">
+  <label class="form-label">Nombre del Servidor *</label>
+  <input type="text" name="nombre" class="form-control" placeholder="ej. Horizon DT Principal" required>
+</div>
+<div class="form-group">
+  <label class="form-label">Host / IP *</label>
+  <input type="text" name="host" class="form-control" placeholder="ej. horizon.empresa.com" required>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="form-group">
+    <label class="form-label">Tipo de Servidor *</label>
+    <select name="tipo" class="form-control" required>
+      {% for t in tipos %}
+      <option value="{{ t }}">{{ t.upper() }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Tipo de Máquinas *</label>
+    <select name="tipo_maquina" class="form-control" required>
+      {% for t in tipos_maquina %}
+      <option value="{{ t }}">{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="form-group">
+    <label class="form-label">Origen</label>
+    <select name="origen" class="form-control">
+      {% for o in origenes %}
+      <option value="{{ o }}">{{ o.upper() if o else '— Sin origen —' }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Dominio por Defecto</label>
+    <input type="text" name="dominio" class="form-control" placeholder="ej. CORP">
+  </div>
+</div>
+<div class="card" style="padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);margin-top:8px;">
+  <div class="text-sm" style="color:var(--c-accent2);font-weight:500;">
+    🔒 Las credenciales (Usuario / Contraseña) no se almacenan en la base de datos por seguridad. Se ingresan por sesión mediante el botón de credenciales vCenter.
+  </div>
+</div>

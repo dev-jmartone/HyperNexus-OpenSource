@@ -1,0 +1,34 @@
+services:
+  vdi-inventory-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vdi-inventory-hub
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-vdi-hub-demo-secret-key-32chars-min}
+      - FERNET_KEY=${FERNET_KEY:-bXlzdGVyaW91c2tleWZvcmRlbW9wdXJwb3NlczEyMzQ1Njc=}
+      - DEMO_MODE=${DEMO_MODE:-1}
+      - AD_DOMAIN=${AD_DOMAIN:-corp.local}
+      - HORIZON_DEFAULT_DOMAIN=${HORIZON_DEFAULT_DOMAIN:-CORP}
+      - INVENTARIO_DB_PATH=/app/data/inventario.db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: vdi-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+{% block title %}Directorio de Usuarios{% endblock %}
+{% block page_title %}👥 Directorio de Usuarios{% endblock %}
+
+{% block topbar_actions %}
+<div class="d-flex gap-2">
+  <button class="btn btn-primary btn-sm" onclick="verificarUsuariosActiveDirectory()">
+    🛡️ Verificar Active Directory
+  </button>
+  <button class="btn btn-outline btn-sm" onclick="sincronizarTodoInventario()">
+    ⚡ Sincronizar Inventario
+  </button>
+  <button class="btn btn-outline btn-sm" onclick="enriquecerUsuariosGal()">
+    📧 Enriquecer GAL (Outlook)
+  </button>
+  <button class="btn btn-outline btn-sm" onclick="abrirModalExtraidos()">
+    🔍 Buscar de Extracción
+  </button>
+  <button class="btn btn-success btn-sm" onclick="document.getElementById('modal-nuevo-usuario').classList.remove('hidden')">
+    + Nuevo Usuario
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtros -->
+<form method="GET" class="filter-bar mb-4">
+  <div class="form-group">
+    <label class="form-label">Buscar</label>
+    <input type="text" name="q" class="form-control" placeholder="Nombre, username, email, empresa..."
+           value="{{ filtros.q }}">
+  </div>
+  <div class="form-group" style="max-width:180px;">
+    <label class="form-label">Estado AD</label>
+    <select name="inactivos" class="form-control">
+      <option value="">Todos</option>
+      <option value="1" {% if filtros.inactivos %}selected{% endif %}>Solo Inactivos</option>
+    </select>
+  </div>
+  <div class="form-group" style="align-self:flex-end;max-width:120px;">
+    <button type="submit" class="btn btn-outline" style="width:100%;">🔍 Filtrar</button>
+  </div>
+  {% if filtros.q or filtros.inactivos %}
+  <div class="form-group" style="align-self:flex-end;max-width:100px;">
+    <a href="{{ url_for('directorio.index') }}" class="btn btn-ghost" style="width:100%;">✕ Limpiar</a>
+  </div>
+  {% endif %}
+</form>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-header">
+    <h2>Usuarios del Directorio</h2>
+    <span class="text-muted text-sm">{{ usuarios|length }} usuario(s)</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Empresa</th>
+          <th>Departamento</th>
+          <th>Estado AD</th>
+          <th>Notas</th>
+          <th>VMs</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td class="fw-600 mono">
+            <a href="{{ url_for('directorio.ficha', uid=u.id) }}" style="color:var(--c-accent2);text-decoration:none;">
+              {{ u.username }}
+            </a>
+          </td>
+          <td>{{ u.nombre_completo or '—' }}</td>
+          <td class="text-sm muted">{{ u.email or '—' }}</td>
+          <td class="text-sm">{{ u.empresa or '—' }}</td>
+          <td class="text-sm muted">{{ u.departamento or '—' }}</td>
+          <td>
+            {% if u.activo_ad %}
+              <span class="badge badge-connected">● Activo</span>
+            {% else %}
+              <span class="badge badge-error">⚠ Inactivo AD</span>
+            {% endif %}
+          </td>
+          <td class="text-sm muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+              title="{{ u.notas or '' }}">
+            {{ u.notas or '—' }}
+          </td>
+          <td style="white-space:nowrap;">
+            {% set u_vms = usuarios_vms_map.get(u.id, []) %}
+            {% if u_vms %}
+              {% set pools_list = [] %}
+              {% for vm in u_vms %}
+                {% if vm.pool not in pools_list %}
+                  {% set _ = pools_list.append(vm.pool) %}
+                {% endif %}
+              {% endfor %}
+              <span class="badge badge-vdi" title="VMs/VDIs: {{ u_vms|map(attribute='nombre')|join(', ') }}">
+                {{ u_vms|length }} VM(s)
+              </span>
+              <span class="badge badge-origen" title="Pools: {{ pools_list|join(', ') }}" style="margin-left:4px;">
+                {{ pools_list|length }} Pool(s)
+              </span>
+            {% else %}
+              <span class="text-muted text-sm">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-2">
+              <button class="btn btn-ghost btn-sm" title="Editar"
+                      onclick="openEditUsuarioDir({{ u.to_dict()|tojson }})">✏️</button>
+              <form method="POST" id="form-del-dir-{{ u.id }}"
+                    action="{{ url_for('directorio.eliminar', uid=u.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="button" class="btn btn-danger btn-sm"
+                        onclick="confirmDelete('¿Eliminar {{ u.username }}?', 'Se eliminarán también los vínculos con VMs.', () => document.getElementById('form-del-dir-{{ u.id }}').submit())">
+                  🗑
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-muted" style="text-align:center;padding:40px;">
+            Sin usuarios en el directorio.
+            <button class="btn btn-primary btn-sm" style="margin-left:12px;"
+                    onclick="document.getElementById('modal-nuevo-usuario').classList.remove('hidden')">
+              + Agregar Usuario
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nuevo Usuario Directorio -->
+<div class="modal-overlay hidden" id="modal-nuevo-usuario"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">➕ Nuevo Usuario en Directorio</h3>
+    <form method="POST" action="{{ url_for('directorio.crear') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Username (AD/SAM) *</label>
+          <input type="text" name="username" class="form-control" placeholder="ej. jperez" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" name="nombre_completo" class="form-control" placeholder="ej. Juan Pérez">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" placeholder="ej. jperez@empresa.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="text" name="telefono" class="form-control" placeholder="ej. +54 11 1234-5678">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Empresa</label>
+          <input type="text" name="empresa" class="form-control" placeholder="ej. Acme Corp">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departamento</label>
+          <input type="text" name="departamento" class="form-control" placeholder="ej. TI / Infraestructura">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" name="activo_ad" value="1" checked> Activo en AD
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea name="notas" class="form-control" rows="3"
+                  placeholder="ej. Usuario desvinculado en 06/2025, VM pendiente reasignación..."></textarea>
+      </div>
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost"
+                onclick="document.getElementById('modal-nuevo-usuario').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar Usuario Directorio -->
+<div class="modal-overlay hidden" id="modal-editar-usuario"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <h3 class="modal-title">✏️ Editar Usuario</h3>
+    <form id="form-editar-usuario" method="POST" action="">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Username *</label>
+          <input type="text" name="username" id="edit-dir-username" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" name="nombre_completo" id="edit-dir-nombre" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" id="edit-dir-email" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="text" name="telefono" id="edit-dir-telefono" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Empresa</label>
+          <input type="text" name="empresa" id="edit-dir-empresa" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departamento</label>
+          <input type="text" name="departamento" id="edit-dir-departamento" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" name="activo_ad" id="edit-dir-activo" value="1"> Activo en AD
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea name="notas" id="edit-dir-notas" class="form-control" rows="3"></textarea>
+      </div>
+      <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost"
+                onclick="document.getElementById('modal-editar-usuario').classList.add('hidden')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Búsqueda e Importación de Usuarios Extraídos -->
+<div class="modal-overlay hidden" id="modal-importar-extraidos"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="max-width:850px;width:90vw;">
+    <h3 class="modal-title">⚡ Usuarios detectados en Extracción</h3>
+    <p class="text-muted text-sm mb-3">
+      Usuarios que figuran asignados a VMs/VDIs en la base de datos de extracción. Podés registrarlos en el directorio y vincularlos a sus máquinas en 1 clic.
+    </p>
+
+    <div style="display:flex;gap:10px;margin-bottom:12px;">
+      <input type="text" id="input-buscar-extraidos" class="form-control"
+             placeholder="Filtrar por username, nombre, empresa, VM..."
+             oninput="renderExtraidos()">
+      <button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="registrarTodosPendientes()">
+        ⚡ Registrar Todos Pendientes
+      </button>
+    </div>
+
+    <div class="table-wrapper" style="max-height:420px;overflow-y:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Empresa</th>
+            <th>VMs / VDIs Asignadas</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-extraidos">
+          <tr>
+            <td colspan="5" class="text-muted text-center" style="padding:24px;">Cargando usuarios...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-4" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost"
+              onclick="document.getElementById('modal-importar-extraidos').classList.add('hidden')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Barra de Carga Progreso AD -->
+<div class="modal-overlay hidden" id="modal-progreso-ad" style="z-index:9999;">
+  <div class="modal-box" style="max-width:700px;width:90vw;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 class="modal-title" style="margin:0;">🛡️ Verificación Active Directory</h3>
+      <span class="badge badge-connected pulse" id="ad-status-badge">En progreso...</span>
+    </div>
+
+    <div class="mb-3">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span class="text-sm text-muted" id="ad-progress-label">Iniciando consulta a Active Directory...</span>
+        <span class="text-sm fw-600" id="ad-progress-pct" style="color:var(--c-accent2);">0%</span>
+      </div>
+      <div class="progress-bar" style="height:12px;background:var(--c-surface2);border-radius:6px;overflow:hidden;">
+        <div class="progress-fill" id="ad-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg, var(--c-accent), var(--c-accent2));transition:width 0.2s ease;"></div>
+      </div>
+    </div>
+
+    <div class="log-terminal" id="ad-log-terminal"
+         style="height:220px;overflow-y:auto;background:var(--c-surface2);border-radius:8px;padding:12px;
+                font-family:monospace;font-size:0.78rem;color:var(--c-text2);white-space:pre-wrap;margin-top:12px;">
+      Conectando a Active Directory...\n
+    </div>
+
+    <div class="d-flex gap-2 mt-3" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost" id="btn-cerrar-ad-progreso" style="display:none;"
+              onclick="document.getElementById('modal-progreso-ad').classList.add('hidden');location.reload();">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let extraidosData = [];
+
+function openEditUsuarioDir(u) {
+  document.getElementById('edit-dir-username').value    = u.username || '';
+  document.getElementById('edit-dir-nombre').value      = u.nombre_completo || '';
+  document.getElementById('edit-dir-email').value       = u.email || '';
+  document.getElementById('edit-dir-telefono').value    = u.telefono || '';
+  document.getElementById('edit-dir-empresa').value     = u.empresa || '';
+  document.getElementById('edit-dir-departamento').value= u.departamento || '';
+  document.getElementById('edit-dir-activo').checked    = u.activo_ad;
+  document.getElementById('edit-dir-notas').value       = u.notas || '';
+  document.getElementById('form-editar-usuario').action = `/directorio/${u.id}/editar`;
+  document.getElementById('modal-editar-usuario').classList.remove('hidden');
+}
+
+async function abrirModalExtraidos() {
+  document.getElementById('modal-importar-extraidos').classList.remove('hidden');
+  document.getElementById('tbody-extraidos').innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">Cargando usuarios...</td></tr>';
+  
+  try {
+    const res = await fetch('/directorio/api/extraidos');
+    extraidosData = await res.json();
+    renderExtraidos();
+  } catch(e) {
+    document.getElementById('tbody-extraidos').innerHTML = '<tr><td colspan="5" class="text-danger text-center" style="padding:24px;">Error al obtener usuarios extraídos.</td></tr>';
+  }
+}
+
+function renderExtraidos() {
+  const q = (document.getElementById('input-buscar-extraidos').value || '').toLowerCase().trim();
+  const tbody = document.getElementById('tbody-extraidos');
+  
+  const filtered = extraidosData.filter(u => 
+    !q || 
+    u.username.toLowerCase().includes(q) || 
+    (u.nombre_completo || '').toLowerCase().includes(q) ||
+    (u.empresa || '').toLowerCase().includes(q) ||
+    u.vms.some(vm => vm.nombre.toLowerCase().includes(q))
+  );
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding:24px;">No se encontraron usuarios.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    const vmsBadges = u.vms.map(vm => `
+      <span class="badge ${vm.tipo === 'VDI' ? 'badge-vdi' : 'badge-vm'}" title="${vm.nombre} · ${vm.pool} · ${vm.empresa}">
+        ${vm.nombre} (${vm.pool})
+      </span>
+    `).join(' ');
+
+    const statusBadge = u.registrado
+      ? '<span class="badge badge-connected">● En Directorio</span>'
+      : '<span class="badge badge-error">⚡ Pendiente</span>';
+
+    const btnAccion = u.registrado
+      ? `<a href="/directorio/${u.directorio_usuario_id}" class="btn btn-ghost btn-sm">Ver Ficha</a>`
+      : `<button class="btn btn-primary btn-sm" onclick="registrarExtraido('${u.username.replace(/'/g, "\\'")}', '${(u.empresa||'').replace(/'/g, "\\'")}', [${u.vms.map(v => v.id).join(',')}])">⚡ Registrar y Vincular</button>`;
+
+    return `
+      <tr>
+        <td class="fw-600 mono">${u.username}</td>
+        <td class="text-sm">${u.empresa || '—'}</td>
+        <td style="max-width:320px;white-space:normal;">${vmsBadges || '—'}</td>
+        <td>${statusBadge}</td>
+        <td>${btnAccion}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function registrarExtraido(username, empresa, maquinaIds) {
+  const payload = {
+    usuarios: [{
+      username: username,
+      empresa: empresa,
+      maquina_ids: maquinaIds
+    }]
+  };
+
+  const res = await fetch('/directorio/api/importar_extraidos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: `Usuario ${username} registrado y vinculado.` });
+    abrirModalExtraidos();
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al registrar usuario.' });
+  }
+}
+
+function verificarUsuariosActiveDirectory() {
+  const modal = document.getElementById('modal-progreso-ad');
+  const fill = document.getElementById('ad-progress-fill');
+  const pctEl = document.getElementById('ad-progress-pct');
+  const label = document.getElementById('ad-progress-label');
+  const badge = document.getElementById('ad-status-badge');
+  const logTerminal = document.getElementById('ad-log-terminal');
+  const btnCerrar = document.getElementById('btn-cerrar-ad-progreso');
+
+  modal.classList.remove('hidden');
+  fill.style.width = '0%';
+  pctEl.textContent = '0%';
+  label.textContent = 'Conectando a Active Directory...';
+  badge.textContent = 'En progreso...';
+  badge.className = 'badge badge-connected pulse';
+  logTerminal.textContent = 'Iniciando verificación en Active Directory...\n';
+  btnCerrar.style.display = 'none';
+
+  const es = new EventSource('/directorio/stream_verificar_ad');
+
+  es.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    if (data.tipo === 'log') {
+      logTerminal.textContent += data.msg + '\n';
+      logTerminal.scrollTop = logTerminal.scrollHeight;
+    }
+    else if (data.tipo === 'progress') {
+      label.textContent = data.msg;
+    }
+    else if (data.tipo === 'pct') {
+      const pct = parseInt(data.msg);
+      fill.style.width = pct + '%';
+      pctEl.textContent = pct + '%';
+    }
+    else if (data.tipo === 'done') {
+      es.close();
+      fill.style.width = '100%';
+      pctEl.textContent = '100%';
+      badge.textContent = '✓ Completado';
+      badge.className = 'badge badge-connected';
+      label.textContent = 'Verificación Active Directory completada';
+      btnCerrar.style.display = '';
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    }
+    else if (data.tipo === 'error') {
+      es.close();
+      badge.textContent = '✗ Error';
+      badge.className = 'badge badge-error';
+      label.textContent = 'Error: ' + data.msg;
+      logTerminal.textContent += '\n[ERROR] ' + data.msg;
+      btnCerrar.style.display = '';
+    }
+  };
+
+  es.onerror = () => {
+    logTerminal.textContent += '\n[Conexión cerrada]';
+    btnCerrar.style.display = '';
+  };
+}
+
+async function enriquecerUsuariosGal() {
+  const result = await SwalDark.fire({
+    title: '¿Enriquecer usuarios vía Outlook GAL?',
+    text: 'Se consultará el GAL de Outlook / Active Directory para obtener Nombre, Email, Empresa y Departamento de los usuarios.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, enriquecer',
+    cancelButtonText: 'Cancelar'
+  });
+  if (!result.isConfirmed) return;
+
+  Toast.fire({ icon: 'info', title: 'Consultando Outlook GAL...' });
+
+  const res = await fetch('/directorio/api/enriquecer_gal', { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+  const data = await res.json();
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: `Enriquecimiento completado: ${data.enriquecidos} usuarios actualizados.` });
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al enriquecer.' });
+  }
+}
+
+async function sincronizarTodoInventario() {
+  const result = await SwalDark.fire({
+    title: '¿Sincronizar todo el inventario?',
+    text: 'Se vincularán automáticamente todos los usuarios detectados en las extracciones con sus VMs/VDIs y Pools.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, sincronizar todo',
+    cancelButtonText: 'Cancelar'
+  });
+  if (!result.isConfirmed) return;
+
+  const res = await fetch('/directorio/api/sincronizar_todo', { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+  const data = await res.json();
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: `Sincronización lista: ${data.usuarios_creados} usuarios creados, ${data.vinculos_creados} vínculos VM/Pool creados.` });
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al sincronizar.' });
+  }
+}
+
+async function registrarTodosPendientes() {
+  const pendientes = extraidosData.filter(u => !u.registrado);
+  if (!pendientes.length) {
+    Toast.fire({ icon: 'info', title: 'No hay usuarios pendientes para registrar.' });
+    return;
+  }
+
+  const result = await SwalDark.fire({
+    title: `¿Registrar ${pendientes.length} usuario(s)?`,
+    text: 'Se agregarán al directorio y se vincularán automáticamente a sus VMs.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, registrar todos',
+    cancelButtonText: 'Cancelar'
+  });
+
+  if (!result.isConfirmed) return;
+
+  const payload = {
+    usuarios: pendientes.map(u => ({
+      username: u.username,
+      empresa: u.empresa,
+      maquina_ids: u.vms.map(v => v.id)
+    }))
+  };
+
+  const res = await fetch('/directorio/api/importar_extraidos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+
+  if (data.ok) {
+    Toast.fire({ icon: 'success', title: `${data.importados} usuarios registrados y ${data.vinculos} vínculos creados.` });
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    Toast.fire({ icon: 'error', title: data.error || 'Error al registrar.' });
+  }
+}
+</script>
+{% endblock %}
