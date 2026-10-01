@@ -1,9 +1,9 @@
 @echo off
-title VDI Inventory Hub - Modo Desarrollo (Flask Debug)
+title HyperNexus - Modo Desarrollo (Flask Debug)
 color 0B
 
 echo ==============================================================================
-echo   VDI INVENTORY HUB - MODO DESARROLLO
+echo   HYPERNEXUS - MODO DESARROLLO
 echo   Servidor: Flask Dev Server (Puerto 5000)
 echo ==============================================================================
 echo.

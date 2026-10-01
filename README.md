@@ -1,4 +1,4 @@
-# 🖥️ Inventario VDI — Enterprise Virtual Desktop & Infrastructure Orchestrator
+# ⚡ HyperNexus — Unified Multi-Hypervisor & Workspace Orchestrator for VMs & VDIs
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Framework: Flask 3.0](https://img.shields.io/badge/framework-Flask%203.0-green.svg)](https://flask.palletsprojects.com/)
@@ -9,43 +9,46 @@
 [![Tests: 74 Passed](https://img.shields.io/badge/tests-74%20passed-brightgreen.svg)](#-suite-de-pruebas-automatizadas)
 [![Demo: Zero-Config Ready](https://img.shields.io/badge/Demo-Zero--Config%20Ready-brightgreen.svg)](#-modo-demostración-zero-config)
 
-**Inventario VDI** es una plataforma web integral de observabilidad, auditoría y orquestación diseñada para entornos corporativos de virtualización de escritorios (**VDI - Virtual Desktop Infrastructure**) a gran escala.
+> ### 📌 Resumen de 1 Línea (TL;DR)
+> **HyperNexus es un plano único de control (*Single-Pane-of-Glass*) y motor de observabilidad que unifica 4 vCenters, 4 pods de VMware Horizon, App Volumes y Active Directory en un buscador global instantáneo con telemetría de capacidad, detección de huérfanos y deduplicación de identidades.**
 
-Permite centralizar, monitorear y gobernar flotas heterogéneas distribuidas en múltiples instancias de **VMware Horizon Connection Servers**, hipervisores **VMware vCenter / vSphere**, gestores de paquetería **VMware App Volumes** y **Microsoft Active Directory (AD)**.
+---
 
 ```mermaid
 flowchart TD
-    subgraph Hypervisors["Infraestructura de Virtualización & Directorio"]
-        H1["VMware Horizon (REST API)"]
-        V1["VMware vCenter (pyVmomi / SOAP / REST)"]
-        AV["VMware App Volumes Manager"]
-        AD["Active Directory (PowerShell / LDAP)"]
+    subgraph Hypervisors["Infraestructura Distribuida (4 vCenters + 4 Horizon Pods)"]
+        VC["4x VMware vCenter (pyVmomi / SOAP / REST)<br/><i>VMs de Servidores, Datastores, ESXi Hosts</i>"]
+        HZ["4x VMware Horizon Pods (REST API)<br/><i>Instant Clones, Pools Flotantes/Dedicados, Granjas RDS</i>"]
+        AV["VMware App Volumes Manager<br/><i>Packages, AppStacks, Writable Volumes</i>"]
+        AD["Active Directory (PowerShell / LDAP)<br/><i>Identidades, UPN vs sAMAccountName</i>"]
     end
 
-    subgraph CoreEngine["Motor de Ingesta & Orquestación"]
+    subgraph HyperNexusEngine["Núcleo HyperNexus — Ingesta & Orquestación"]
         EXT["Extractor Concurrente (ThreadPoolExecutor)"]
-        JOB["Job Engine & SSE Streaming (Redis / In-Memory)"]
-        DEDUP["Motor de Deduplicación & Fusión de Usuarios"]
+        JOB["Job Engine & Streaming SSE (Redis / Memoria)"]
+        DEDUP["Motor de Deduplicación & Fusión de Identidades"]
         SCHED["APScheduler (Sincronización en Fondo)"]
+        SAN["Detección de VMs Huérfanas & Alertas de Disco >90%"]
     end
 
-    subgraph BackendApp["Backend Flask 3.0 + Waitress"]
+    subgraph BackendApp["Backend Flask 3.0 + WSGI Waitress"]
         API["REST API & Blueprints Modulares"]
         SEC["Criptografía Fernet + Protección CSRF"]
         DB[(SQLite WAL / SQLAlchemy ORM)]
     end
 
-    subgraph UserInterface["Frontend SPA (React 18 + Tailwind)"]
-        DASH["Dashboard KPIs & Métricas de Almacenamiento"]
+    subgraph UserInterface["Frontend SPA (React 18 + Tailwind CSS)"]
+        DASH["Dashboard Global & Métricas Cross-Cluster"]
+        VMS["Buscador Unificado de VMs & Escritorios VDI"]
         POOLS["Gestión de Pools & Granjas RDS"]
-        DIR["Directorio de Usuarios & Auditoría"]
-        VMS["Inventario de Máquinas Virtuales"]
+        DIR["Directorio Corporativo & Auditoría Forense"]
     end
 
     Hypervisors --> EXT
     EXT --> JOB
     JOB --> API
     SCHED --> EXT
+    SAN --> DB
     DEDUP --> DB
     API --> DB
     API <--> SEC
@@ -53,122 +56,152 @@ flowchart TD
 ```
 
 > [!TIP]
-> **Listo para probar en segundos:** Inventario VDI incluye un **Modo Demo Zero-Config** (`DEMO_MODE=1`) con una base de datos SQLite pre-sembrada que contiene más de 70 máquinas virtuales, 31 usuarios de Active Directory, 7 Desktop Pools, granjas RDS, paquetes de App Volumes y alertas de almacenamiento crítico. **No requiere conexión a un hipervisor real para su evaluación.**
+> **Listo para probar en segundos:** HyperNexus incluye un **Modo Demo Zero-Config** (`DEMO_MODE=1`) con una base de datos SQLite pre-sembrada que emula los 4 vCenters y 4 Horizon Connection Servers con más de 70 máquinas virtuales y escritorios VDI, 31 usuarios corporativos, 7 Desktop Pools, granjas RDS, paquetes de App Volumes y alertas de almacenamiento crítico. **No requiere conexión a hipervisores reales para su evaluación.**
 
 ---
 
-## 🎯 ¿Qué problemática resuelve Inventario VDI?
+## 🎯 ¿Qué problema resuelve HyperNexus?
 
-En infraestructuras de virtualización empresarial con cientos o miles de escritorios virtuales, la administración diaria presenta desafíos críticos:
+En infraestructuras corporativas medianas y grandes, los entornos de virtualización crecen de manera fragmentada debido a la segregación por zonas de red (DMZ vs. Red Interna), datacenters geográficos o unidades de negocio independientes:
 
-1. **Fragmentación de consolas:** Los administradores deben saltar entre Horizon Administrator Console, vSphere Client, App Volumes Manager y consolas de Active Directory para rastrear un único puesto de trabajo.
-2. **Capacidad y costos ocultos:** Escritorios huérfanos (*orphaned VMs*), snapshots olvidados de Golden Masters y discos que superan el 90% de capacidad sin alertas tempranas degradan la infraestructura de almacenamiento (SAN/vSAN).
-3. **Inconsistencia de identidades corporativas:** Diferencias entre el UPN moderno y el `sAMAccountName` (pre-Windows 2000), o cuentas duplicadas generadas tras cambios de razón social o fusiones empresariales.
-4. **Asignaciones residuales de App Volumes:** Paquetes de software y *Writable Volumes* asignados a usuarios dados de baja o máquinas desmanteladas que consumen licencias y espacio de almacenamiento.
-5. **Falta de auditoría unificada:** Dificultad para responder con celeridad ante auditorías de seguridad sobre quién accedió a qué escritorio, desde qué IP y en qué rango horario.
+* **4 instancias independientes de VMware vCenter** gestionando clusters de virtualización y máquinas virtuales de infraestructura/servidores.
+* **4 pods independientes de VMware Horizon Connection Server** gestionando escritorios virtuales (VDI) y aplicaciones remotas (RDS).
+* Instancias satélite de **VMware App Volumes Manager** y servidores de **Active Directory**.
 
-**Inventario VDI unifica este ecosistema** en una interfaz moderna, reactiva y veloz con capacidades avanzadas de deduplicación y diagnóstico.
+### La Consecuencia: Fatiga de Consolas (*Console Fatigue*) y Puntos Ciegos
+1. **Pérdida crítica de tiempo (Console Hopping):** Para responder una pregunta simple como *"¿dónde está la máquina del usuario X?"* o *"¿en qué pod se desplegó el servidor Y?"*, los administradores debían autenticarse y abrir **más de 10 consolas web separadas**, revisando manualmente cada una.
+2. **Inexistencia de un buscador global:** Las herramientas nativas de VMware no ofrecen búsqueda cruzada federada (*cross-cluster / cross-pod*).
+3. **Escritorios y discos huérfanos (*Orphaned VMs*):** Escritorios VDI dados de baja o pools eliminados de Horizon continuaban ocupando gigabytes de almacenamiento de alta velocidad en la SAN/vSAN de vSphere sin que nadie lo detectara.
+4. **Ceguera de almacenamiento crítico:** Servidores y VDIs superando el 85% y 90% de capacidad de disco sin un tablero unificado que alerte antes del congelamiento del sistema operativo.
+5. **Divergencia de identidades:** Nombres de usuario bajo UPN moderno en un pod y bajo formato `sAMAccountName` (pre-Windows 2000) en otro, generando cuentas duplicadas e inconsistencias en la entrega de licencias de software.
 
----
-
-## ✨ Características Principales
-
-### 🖥️ Ingesta Multi-Hipervisor Concurrente
-- **VMware Horizon**: Conexión con Connection Servers vía REST API. Ingesta de Pools (Instant Clones, Linked Clones, Dedicados, Flotantes), Granjas RDS (Remote Desktop Services), aplicaciones publicadas y sesiones en vivo.
-- **VMware vCenter / vSphere**: Ingesta profunda mediante pyVmomi (SOAP) y REST. Telemetría de VMs, datastores, clusters ESXi, utilización de vCPU, memoria RAM y almacenamiento aprovisionado vs. usado.
-- **VMware App Volumes**: Detección de aplicaciones, paquetes, asignaciones de usuario y estado de Writable Volumes (discos de persistencia de usuario).
-
-### 👥 Directorio & Motor de Deduplicación Inteligente
-- **Directorio Unificado**: Catálogo central de usuarios con vinculación muchos a muchos (M:M) hacia escritorios virtuales y aplicaciones.
-- **Detección Automática de Duplicados**: Algoritmo de similitud que detecta colisiones de cuentas por nombre o email, y las valida estrictamente contra Active Directory.
-- **Fusión Canónica en 1 Clic**: Reasigna de forma atómica todas las máquinas y paquetes a la cuenta canónica, preservando el historial de auditoría y eliminando la duplicada sin riesgo de inconsistencias.
-
-### 🚨 Diagnóstico de Salud & Almacenamiento
-- **Detección de VMs Huérfanas**: Identificación automática de VMs clonadas cuyos usuarios fueron desvinculados o pools que fueron eliminados de Horizon pero persisten en disco.
-- **Alertas de Capacidad Crítica**: Alertas visuales y clasificación para discos con más del 85% y 90% de utilización.
-- **Tracking de Bots RPA**: Identificación y etiquetado de estaciones virtuales dedicadas a automatización de procesos (Robotic Process Automation).
-
-### 🔒 Seguridad de Grado Corporativo
-- **Cifrado de Credenciales**: Almacenamiento seguro de contraseñas de hipervisores y tokens mediante cifrado simétrico **Fernet (AES-128-CBC + HMAC-SHA256)**.
-- **Políticas de Autenticación**: Hashing de contraseñas con **PBKDF2-HMAC-SHA256 / Argon2**, bloqueo temporal ante intentos fallidos reiterados (*lockout*) y sesiones seguras HTTP-only.
-- **Protección CSRF Integral**: Cobertura estricta con tokens `X-CSRFToken` en todas las operaciones mutables de la API REST.
-- **Mitigación de Inyección de Comandos**: Scripts dinámicos parametrizados de PowerShell con desacoplamiento total en archivos JSON de entrada.
-- **Protección Path Traversal**: Descarga controlada de reportes y plantillas mediante `send_from_directory` con rutas normalizadas.
+**HyperNexus resuelve esto actuando como un nexo centralizador**: ingesta todas las fuentes en paralelo y provee un **buscador global instantáneo, reconciliación automática de identidades y diagnóstico de salud en un único plano de control**.
 
 ---
 
-## 🚀 Modo Demostración Zero-Config
+## 🛠️ ¿Para qué sirve? (Casos de Uso Clave)
 
-Para evaluar la aplicación en un portfolio o entorno local sin acceso a servidores vCenter ni Horizon:
+| Caso de Uso | ¿Qué hace HyperNexus? | Beneficio Operativo |
+| :--- | :--- | :--- |
+| **Búsqueda Global Cross-Cluster** | Localiza por nombre, IP, usuario asignado o pool a través de los 4 vCenters y 4 Horizons en milisegundos. | Reduce el tiempo de atención de soporte Nivel 2/3 de 15 minutos a 5 segundos. |
+| **Auditoría Forense de Huérfanos** | Correlaciona el catálogo de Horizon contra las VMs reales en disco en vCenter para detectar máquinas sin pool o sin usuario activo. | Recupera cientos de gigabytes de almacenamiento SAN/vSAN al eliminar discos abandonados. |
+| **Detección Temprana de Almacenamiento Crítico** | Escanea el aprovisionamiento de discos de todas las VMs y clasifica aquellas con consumo >85% y >90%. | Previene caídas imprevistas de servicios críticos o corrupción de perfiles de usuario. |
+| **Deduplicación & Fusión de Identidades AD** | Detecta colisiones heurísticas entre cuentas corporativas y las valida contra Active Directory, permitiendo su fusión canónica en 1 clic. | Garantiza una única fuente de la verdad para asignación de hardware y software corporativo. |
+| **Control de Writable Volumes & AppStacks** | Audita discos de persistencia de usuario y paquetes de software huérfanos que ya no corresponden a ningún colaborador. | Evita desperdicio de licencias y optimiza la capacidad del repositorio de App Volumes. |
+| **Trazabilidad & Cumplimiento (Compliance)** | Registra cada consulta, cambio de credencial, fusión de usuarios y extracción en una bitácora inmutable con IP y usuario. | Facilita responder a requerimientos de auditorías internas y normativas de seguridad (ISO 27001, SOC 2). |
 
-1. El repositorio incluye una base de datos pre-configurada en `data/inventario.db`.
-2. La variable `DEMO_MODE=1` viene activada por defecto en `.env`.
-3. Todos los nombres de empresas, servidores, IPs y credenciales en el entorno de demostración son estrictamente genéricos (`Acme Corp`, `GlobalTech`, `corp.local`, `10.10.x.x`).
+---
 
-### 🔑 Credenciales de Acceso Demo
+## 🖥️ ¿Cómo se usa? (Guía de Flujo Operativo)
 
-| Usuario | Contraseña | Rol | Acceso |
+### 1. Acceso al Sistema
+1. Ingresa a `http://localhost:5000` en tu navegador.
+2. Inicia sesión con cualquiera de los perfiles demo provistos:
+   - **Administrador:** `admin` / `Admin123!`
+   - **Operador:** `demo` / `Demo123!`
+   - **Auditor:** `auditor` / `Auditor123!`
+
+### 2. Dashboard Global & Widgets en Tiempo Real
+* Visualiza las tarjetas de **KPIs consolidados**: Total de VMs y VDIs activas, sesiones concurrentes, almacenamiento aprovisionado global y estado de salud de agentes VMware.
+* Revisa el widget de **Discos Críticos (>90%)** y el detector de **Máquinas Huérfanas**.
+* Personaliza los paneles mediante el botón **Widgets** y ajusta el intervalo de actualización automática (1m, 5m, 15m, 30m, 1h).
+
+### 3. Buscador Global Instantáneo (Barra Superior)
+* Escribe cualquier término en la barra de búsqueda superior (ejemplo: `jdoe`, `win10`, `pool-finanzas`, `10.10.`).
+* El sistema filtra en vivo sobre todas las máquinas, pools, granjas RDS y usuarios de los 4 vCenters y 4 Horizon Connection Servers simultáneamente.
+
+### 4. Extracción de Información en Vivo
+* Dirígete a la pestaña **Extracción de Información** o presiona **Extraer Datos**.
+* El motor lanza un hilo concurrente (`ThreadPoolExecutor`) contra cada hipervisor configurado.
+* Puedes observar el progreso en tiempo real mediante la **consola de eventos en streaming (SSE)** con barra de porcentaje y bitácora detallada.
+
+### 5. Directorio de Usuarios & Fusión de Duplicados
+* Accede a la pestaña **Directorio Usuarios**.
+* Haz clic en **Buscar Duplicados**: el motor analizará colisiones por nombre y email y las contrastará contra Active Directory.
+* En la lista de candidatos, selecciona **Fusionar con Canónico**: el sistema reasigna de manera atómica todas las máquinas virtuales y paquetes de software al registro principal y purga la cuenta redundante, registrando la auditoría del cambio.
+
+### 6. Exportación de Reportes
+* Dirígete a la pestaña **Reportes & Excel**.
+* Selecciona los filtros deseados (por vCenter, estado de máquina, pool o rango de almacenamiento) y exporta informes ejecutivos en formato **Excel (.xlsx)** o **CSV**, protegidos contra Path Traversal.
+
+---
+
+## ⚙️ ¿Cómo configurarlo? (Paso a Paso)
+
+### 1. Variables de Entorno (`.env`)
+
+Copia la plantilla `.env.example` a `.env`:
+```bash
+cp .env.example .env
+```
+
+| Variable | Tipo | Descripción | Valor por Defecto |
 | :--- | :--- | :--- | :--- |
-| **`admin`** | `Admin123!` | Administrador | Control total de servidores, ingesta, usuarios y configuración |
-| **`demo`** | `Demo123!` | Usuario | Acceso a métricas, inventario de VMs y catálogo de aplicaciones |
-| **`auditor`** | `Auditor123!` | Auditor | Consulta de logs de auditoría, eventos de tareas y reportes |
+| **`DEMO_MODE`** | `1` o `0` | **`1`** activa el modo demo offline con datos simulados. **`0`** activa la conexión real con hipervisores y AD. | `1` |
+| **`SECRET_KEY`** | String | Clave criptográfica para firmas seguras de sesión Flask. | *(Generada automáticamente)* |
+| **`FERNET_KEY`** | Base64 | Clave simétrica Fernet para cifrar las contraseñas de los hipervisores en base de datos. | *(Generada automáticamente)* |
+| **`AD_DOMAIN`** | String | FQDN del dominio corporativo de Active Directory (ej. `corp.local` o `empresa.com`). | `corp.local` |
+| **`INVENTARIO_DB_PATH`** | Ruta | Ubicación absoluta o relativa del archivo de base de datos SQLite. | `data/inventario.db` |
+| **`REDIS_URL`** | URL | URL de Redis para el motor de streaming y cola de jobs (opcional; si está vacío, opera en memoria). | `redis://localhost:6379/0` |
+| **`PORT`** | Entero | Puerto TCP en el que escuchará el servidor web. | `5000` |
+| **`FORCE_HTTPS`** | `1` o `0` | Forza cookies de sesión seguras (`Secure=True`) en despliegues con terminación TLS. | `0` |
 
 ---
 
-## ⚡ Guía de Inicio Rápido
+### 2. Conectar Hipervisores Reales (Producción: `DEMO_MODE=0`)
 
-### Opción 1: Lanzadores Rápidos en Windows (.bat)
+Para pasar de la demo a producción con tus clusters reales:
 
-El método más sencillo en sistemas Windows. El script detecta el intérprete Python, verifica el entorno virtual e inicia el servidor de producción abriendo el navegador automáticamente:
+1. Configura `DEMO_MODE=0` en tu archivo `.env`.
+2. Inicia la aplicación y navega a **Servidores & VCs** (`/servidores`) con rol Administrador.
+3. Haz clic en **Nuevo Servidor** y registra cada una de tus instancias:
+   * **Instancias de vCenter:** Tipo `vCenter`, URL base (ej. `https://vcenter-dc1.tuempresa.local`), usuario de servicio (con permisos de solo lectura o superiores) y contraseña.
+   * **Instancias de Horizon:** Tipo `Horizon`, URL del Connection Server (ej. `https://horizon-pod1.tuempresa.local`), dominio corporativo y credenciales de API.
+   * **App Volumes Manager:** Tipo `App Volumes`, URL del administrador (ej. `https://appvol.tuempresa.local`).
+4. *Todas las credenciales ingresadas se cifran automáticamente en reposo mediante **Fernet (AES-128-CBC + HMAC-SHA256)** antes de guardarse en la base de datos.*
+5. Haz clic en **Test Conexión** para validar la comunicación de red y los certificados TLS.
 
+---
+
+### 3. Configurar Active Directory (PowerShell / LDAP)
+
+* En sistemas **Windows**: HyperNexus utiliza PowerShell con comandos parametrizados (`Get-ADUser`) contra el dominio especificado en `AD_DOMAIN`. Requiere que el servidor tenga conectividad de red LDAP/LDAPS (puertos 389/636) hacia los controladores de dominio.
+* En sistemas **Linux / Docker**: Se configuran variables estándar de consulta LDAP o se utiliza el modo de sincronización vía API del directorio.
+
+---
+
+## ⚡ Guías de Arranque Rápido
+
+### Opción A: Lanzador en Windows con 1 Clic (.bat)
 ```bat
-:: Iniciar en modo Producción (Waitress en http://127.0.0.1:5000)
+:: Arranca el servidor Waitress de producción y abre el navegador automáticamente
 iniciar_prod.bat
 
-:: O iniciar en modo Desarrollo con recarga automática
+:: O arranca en modo desarrollo con autorecarga de código
 iniciar_dev.bat
 ```
 
----
-
-### Opción 2: Docker & Docker Compose (Multiplataforma)
-
-Ejecuta la solución completa (Backend Python + Servidor WSGI + Assets React optimizados + Redis) en contenedores aislados:
-
+### Opción B: Despliegue con Docker Compose
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/inventario-vdi.git
-cd inventario-vdi
-
-# 2. Levantar los contenedores
+# Construye la imagen multi-etapa y levanta HyperNexus + Redis
 docker compose up -d
 
-# 3. Acceder en el navegador
-# http://localhost:5000
+# Acceder en: http://localhost:5000
 ```
 
----
-
-### Opción 3: Instalación Manual
-
+### Opción C: Instalación Manual con Python
 ```bash
-# 1. Crear y activar entorno virtual
+# 1. Crear entorno virtual
 python -m venv .venv
-# En Windows:
-.venv\Scripts\activate
-# En Linux / macOS:
-source .venv/bin/activate
+.venv\Scripts\activate   # En Linux: source .venv/bin/activate
 
 # 2. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Configurar variables de entorno
+# 3. Configurar entorno
 cp .env.example .env
 
-# 4. (Opcional) Regenerar base de datos demo
-python seed_db.py
-
-# 5. Iniciar con servidor Waitress de producción
+# 4. Iniciar servidor de producción Waitress
 python server_prod.py
 ```
 
@@ -177,7 +210,7 @@ python server_prod.py
 ## 📁 Estructura del Repositorio
 
 ```text
-InventarioVDI/
+HyperNexus/
 ├── core/                               # Núcleo de integración y clientes de infraestructura
 │   ├── ad_client.py                    # Cliente parametrizado de Active Directory (PowerShell/LDAP)
 │   ├── appvolumes_client.py            # Cliente REST para VMware App Volumes Manager
@@ -191,7 +224,7 @@ InventarioVDI/
 │   │   ├── api.py                      # Endpoints centrales del inventario, VMs y métricas
 │   │   ├── auth_routes.py              # Autenticación, bloqueo por fuerza bruta y sesiones
 │   │   ├── directorio.py               # Gestión del directorio corporativo y sincronización AD
-│   │   ├── inventario.py               # Ingesta batch y orquestación de hypervisores
+│   │   ├── inventario.py               # Ingesta batch y orquestación multi-hipervisor
 │   │   ├── reportes.py                 # Exportación de reportes Excel / CSV seguros
 │   │   └── usuarios.py                 # Administración de operadores del sistema
 │   ├── frontend/                       # Código fuente de la Single Page Application (React 18)
@@ -257,22 +290,6 @@ tests/test_vcenter_models.py ....                                        [100%]
 
 ====================== 74 passed in 24.63s ======================
 ```
-
----
-
-## ⚙️ Variables de Entorno Principales
-
-El archivo `.env` permite configurar el comportamiento de la plataforma:
-
-| Variable | Descripción | Valor por Defecto |
-| :--- | :--- | :--- |
-| `DEMO_MODE` | Activa el modo demostración sin requerir hipervisores reales | `1` |
-| `SECRET_KEY` | Clave criptográfica para firmas de sesión Flask | Generada automáticamente |
-| `FERNET_KEY` | Clave para cifrado simétrico de credenciales almacenadas | Generada automáticamente |
-| `AD_DOMAIN` | Dominio corporativo de Active Directory | `corp.local` |
-| `REDIS_URL` | Conexión con Redis para streaming de jobs (opcional) | `redis://localhost:6379/0` |
-| `FORCE_HTTPS` | Fuerza cookies seguras para despliegues con SSL/TLS | `0` |
-| `PORT` | Puerto de escucha del servidor web | `5000` |
 
 ---
 

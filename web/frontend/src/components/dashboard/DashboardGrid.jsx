@@ -1,7 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
 import { useDashboardStore, GRID_COLS, ROW_HEIGHT_PX } from '../../store/useDashboardStore';
 
 import { KpiWidget } from '../widgets/KpiWidget';

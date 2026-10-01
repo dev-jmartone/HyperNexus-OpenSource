@@ -1,14 +1,14 @@
 services:
-  vdi-inventory-hub:
+  hypernexus:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vdi-inventory-hub
+    container_name: hypernexus
     restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
-      - SECRET_KEY=${SECRET_KEY:-vdi-hub-demo-secret-key-32chars-min}
+      - SECRET_KEY=${SECRET_KEY:-hypernexus-demo-secret-key-32chars-min}
       - FERNET_KEY=${FERNET_KEY:-bXlzdGVyaW91c2tleWZvcmRlbW9wdXJwb3NlczEyMzQ1Njc=}
       - DEMO_MODE=${DEMO_MODE:-1}
       - AD_DOMAIN=${AD_DOMAIN:-corp.local}
@@ -22,7 +22,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: vdi-redis
+    container_name: hypernexus-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:

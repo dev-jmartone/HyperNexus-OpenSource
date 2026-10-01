@@ -1,9 +1,9 @@
 @echo off
-title VDI Inventory Hub - Servidor Produccion (Waitress WSGI)
+title HyperNexus - Servidor Produccion (Waitress WSGI)
 color 0A
 
 echo ==============================================================================
-echo   VDI INVENTORY HUB - MODO PRODUCCION
+echo   HYPERNEXUS - MODO PRODUCCION
 echo   Servidor WSGI: Waitress (Multi-thread 0.0.0.0:5000)
 echo ==============================================================================
 echo.

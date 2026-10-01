@@ -57,8 +57,8 @@ export function Sidebar({ currentTab, setCurrentTab }) {
           </div>
           {isExpanded && (
             <div className="truncate">
-              <h1 className="text-sm font-bold text-slate-100 tracking-tight leading-none">Inventario VDI</h1>
-              <span className="text-[10px] text-slate-400 font-mono">v2.0 • Pro UI</span>
+              <h1 className="text-sm font-bold text-slate-100 tracking-tight leading-none">HyperNexus</h1>
+              <span className="text-[10px] text-slate-400 font-mono">v2.0 • Orchestrator</span>
             </div>
           )}
         </div>

@@ -26,8 +26,8 @@ export function LoginPage() {
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white mx-auto shadow-xl shadow-indigo-600/30 mb-3">
             <Monitor className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Inventario VDI</h1>
-          <p className="text-xs text-slate-400 mt-1">Plataforma de Control de Infraestructura Virtual</p>
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">HyperNexus</h1>
+          <p className="text-xs text-slate-400 mt-1">Multi-Hypervisor & VDI Control Plane</p>
         </div>
 
         {error && (

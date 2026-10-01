@@ -1,6 +1,6 @@
-# VDI Inventory Hub (Open Source Edition)
+# HyperNexus (Open Source Edition)
 
-Enterprise Virtual Desktop Infrastructure (VDI) management, inventory, and analytics platform. Unifies VMware Horizon Connection Servers, VMware vSphere vCenter, VMware App Volumes, and Active Directory into a single pane of glass with real-time health telemetry, capacity tracking, orphaned VM detection, and automated directory reconciliation.
+Enterprise Multi-Hypervisor & Virtual Desktop Infrastructure (VDI) management, inventory, and analytics platform. Unifies 4x VMware vCenter servers, 4x VMware Horizon Connection Servers, VMware App Volumes, and Active Directory into a single pane of glass with real-time health telemetry, cross-cluster search, capacity tracking, orphaned VM detection, and automated directory reconciliation.
 
 ---
 
