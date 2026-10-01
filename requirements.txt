@@ -40,7 +40,7 @@ numpy==2.5.1
 et_xmlfile==2.0.0
 
 # --- Integración Active Directory / Outlook (web/routes/directorio.py) ---
-pywin32==312
+pywin32==312; sys_platform == 'win32'
 
 # --- SOAP vCenter (VM Notes/Annotation, no expuesto por la REST Automation API pública,
 # ver core/vcenter_soap.py) ---
