@@ -124,7 +124,7 @@ def create_app() -> Flask:
     # Proteger todas las rutas (excepto login/static/api.auth_*) con login_required global
     @app.before_request
     def require_login():
-        allowed_endpoints = {"auth.login", "auth.logout", "api.auth_login", "api.auth_me", "api.csrf_token", "static", "serve_assets", "serve_favicon"}
+        allowed_endpoints = {"auth.login", "auth.logout", "api.auth_login", "api.auth_me", "api.csrf_token", "api.health", "static", "serve_assets", "serve_favicon"}
         if request.endpoint in allowed_endpoints:
             return
         if not session.get("user_id"):

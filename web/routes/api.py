@@ -25,6 +25,12 @@ from web.routes.directorio import (
 bp_api = Blueprint("api", __name__, url_prefix="/api")
 
 
+@bp_api.route("/health", methods=["GET"])
+def health():
+    """Endpoint ligero de estado para Docker HEALTHCHECK y plataformas de hosting (Render/K8s)."""
+    return jsonify({"status": "healthy", "service": "HyperNexus"}), 200
+
+
 @bp_api.route("/configuracion/webhook", methods=["GET", "POST"])
 def configuracion_webhook_api():
     from web.db import Configuracion
